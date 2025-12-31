@@ -21,8 +21,8 @@ export default function LogsPage() {
     applyFilters();
   }, [logs, filterAction, filterResource, filterStatus]);
 
-  const loadLogs = () => {
-    const auditLogs = storage.getAuditLogs();
+  const loadLogs = async () => {
+    const auditLogs = await storage.getAuditLogs();
     setLogs(auditLogs);
   };
 
@@ -44,10 +44,10 @@ export default function LogsPage() {
     setFilteredLogs(filtered);
   };
 
-  const handleClearLogs = () => {
+  const handleClearLogs = async () => {
     if (confirm('모든 감사 로그를 삭제하시겠습니까?')) {
-      storage.clearAuditLogs();
-      loadLogs();
+      await storage.clearAuditLogs();
+      await loadLogs();
     }
   };
 

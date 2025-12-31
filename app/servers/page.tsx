@@ -22,25 +22,30 @@ export default function ServersPage() {
     loadServers();
   }, [loadServers]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingId) {
-      updateServer(editingId, formData);
-      setEditingId(null);
-    } else {
-      addServer({
-        ...formData,
-        id: Date.now().toString(),
+    try {
+      if (editingId) {
+        await updateServer(editingId, formData);
+        setEditingId(null);
+      } else {
+        await addServer({
+          ...formData,
+          id: Date.now().toString(),
+        });
+      }
+      setFormData({
+        name: '',
+        host: '',
+        apiKey: '',
+        vdom: 'root',
+        enabled: true,
       });
+      setShowForm(false);
+    } catch (error) {
+      console.error('Failed to save server:', error);
+      alert('서버 저장에 실패했습니다.');
     }
-    setFormData({
-      name: '',
-      host: '',
-      apiKey: '',
-      vdom: 'root',
-      enabled: true,
-    });
-    setShowForm(false);
   };
 
   const handleEdit = (server: FortigateServer) => {
@@ -248,9 +253,14 @@ export default function ServersPage() {
                     <Edit2 className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (confirm(`${server.name} 서버를 삭제하시겠습니까?`)) {
-                        deleteServer(server.id);
+                        try {
+                          await deleteServer(server.id);
+                        } catch (error) {
+                          console.error('Failed to delete server:', error);
+                          alert('서버 삭제에 실패했습니다.');
+                        }
                       }
                     }}
                     className="p-2 text-red-600 hover:bg-red-50 rounded"

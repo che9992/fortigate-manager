@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Server, Home, Shield, Users, FileText, Settings } from 'lucide-react';
+import { Server, Home, Shield, Users, FileText, Settings, Bug, Globe } from 'lucide-react';
 
 export function Navigation() {
   const pathname = usePathname();
@@ -11,8 +11,10 @@ export function Navigation() {
     { href: '/', label: '대시보드', icon: Home },
     { href: '/addresses', label: 'Address 관리', icon: Users },
     { href: '/policies', label: 'Policy 관리', icon: Shield },
+    { href: '/domain-analyzer', label: '도메인 분석', icon: Globe },
     { href: '/logs', label: '감사 로그', icon: FileText },
     { href: '/servers', label: '서버 설정', icon: Settings },
+    { href: '/debug', label: '디버그', icon: Bug },
   ];
 
   return (

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
-import { FortigateClient } from '@/lib/fortigate-client';
+import { FortigateClientProxy } from '@/lib/fortigate-client-proxy';
 import { Activity, AlertCircle, CheckCircle, XCircle, Server, Shield, Users } from 'lucide-react';
 import type { DashboardStats } from '@/types';
 
@@ -27,7 +27,7 @@ export default function DashboardPage() {
         const serverStatus = await Promise.all(
           servers.map(async (server) => {
             try {
-              const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+              const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
               const status = await client.getSystemStatus();
               return {
                 serverId: server.id,
@@ -53,7 +53,7 @@ export default function DashboardPage() {
 
         for (const server of servers) {
           try {
-            const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+            const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
             const [addresses, groups, policies] = await Promise.all([
               client.getAddresses(),
               client.getAddressGroups(),

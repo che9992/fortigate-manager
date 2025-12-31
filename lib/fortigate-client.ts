@@ -7,17 +7,28 @@ export class FortigateClient {
 
   constructor(host: string, apiKey: string, vdom: string = 'root') {
     this.vdom = vdom;
-    this.client = axios.create({
+
+    // Check if running in Node.js environment (server-side)
+    const isServer = typeof window === 'undefined';
+
+    const config: any = {
       baseURL: `https://${host}/api/v2`,
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      httpsAgent: new (require('https').Agent)({
-        rejectUnauthorized: false, // FortiGate often uses self-signed certs
-      }),
       timeout: 30000,
-    });
+    };
+
+    // Only use httpsAgent on server-side
+    if (isServer) {
+      const https = require('https');
+      config.httpsAgent = new https.Agent({
+        rejectUnauthorized: false, // FortiGate often uses self-signed certs
+      });
+    }
+
+    this.client = axios.create(config);
   }
 
   // System Status

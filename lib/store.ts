@@ -5,10 +5,10 @@ import { storage } from './storage';
 interface AppState {
   servers: FortigateServer[];
   selectedServers: string[];
-  loadServers: () => void;
-  addServer: (server: FortigateServer) => void;
-  updateServer: (id: string, updates: Partial<FortigateServer>) => void;
-  deleteServer: (id: string) => void;
+  loadServers: () => Promise<void>;
+  addServer: (server: FortigateServer) => Promise<void>;
+  updateServer: (id: string, updates: Partial<FortigateServer>) => Promise<void>;
+  deleteServer: (id: string) => Promise<void>;
   toggleServerSelection: (id: string) => void;
   selectAllServers: () => void;
   clearServerSelection: () => void;
@@ -18,29 +18,32 @@ export const useStore = create<AppState>((set, get) => ({
   servers: [],
   selectedServers: [],
 
-  loadServers: () => {
-    const servers = storage.getServers();
+  loadServers: async () => {
+    const servers = await storage.getServers();
     set({
       servers,
       selectedServers: servers.filter(s => s.enabled).map(s => s.id),
     });
   },
 
-  addServer: (server) => {
-    storage.addServer(server);
-    set({ servers: storage.getServers() });
+  addServer: async (server) => {
+    await storage.addServer(server);
+    const servers = await storage.getServers();
+    set({ servers });
   },
 
-  updateServer: (id, updates) => {
-    storage.updateServer(id, updates);
-    set({ servers: storage.getServers() });
+  updateServer: async (id, updates) => {
+    await storage.updateServer(id, updates);
+    const servers = await storage.getServers();
+    set({ servers });
   },
 
-  deleteServer: (id) => {
-    storage.deleteServer(id);
+  deleteServer: async (id) => {
+    await storage.deleteServer(id);
     const { selectedServers } = get();
+    const servers = await storage.getServers();
     set({
-      servers: storage.getServers(),
+      servers,
       selectedServers: selectedServers.filter(sid => sid !== id),
     });
   },

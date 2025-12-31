@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { FortigateClient } from '@/lib/fortigate-client';
+import { FortigateClientProxy } from '@/lib/fortigate-client-proxy';
 import { storage } from '@/lib/storage';
 import { ServerSelector } from '@/components/ServerSelector';
-import { Plus, Trash2, Edit2, RefreshCw, Loader2 } from 'lucide-react';
+import { MultiSelect } from '@/components/MultiSelect';
+import { Plus, Trash2, Edit2, RefreshCw, Loader2, Search } from 'lucide-react';
 import type { Address, AddressGroup } from '@/types';
 
 type TabType = 'addresses' | 'groups';
@@ -15,12 +16,23 @@ export default function AddressesPage() {
   const [activeTab, setActiveTab] = useState<TabType>('addresses');
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [groups, setGroups] = useState<AddressGroup[]>([]);
+  const [filteredAddresses, setFilteredAddresses] = useState<Address[]>([]);
+  const [filteredGroups, setFilteredGroups] = useState<AddressGroup[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingAddress, setEditingAddress] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
+
+  // Helper function to convert to array
+  const toArray = (value: any): string[] => {
+    if (Array.isArray(value)) return value.map(v => typeof v === 'object' ? v.name || String(v) : String(v));
+    if (typeof value === 'object' && value !== null) return [value.name || String(value)];
+    if (typeof value === 'string') return [value];
+    return [];
+  };
 
   const [addressFormData, setAddressFormData] = useState<Address>({
     name: '',
@@ -43,7 +55,7 @@ export default function AddressesPage() {
       const server = servers.find(s => s.id === selectedServers[0]);
       if (!server) return;
 
-      const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+      const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
       const [addressList, groupList] = await Promise.all([
         client.getAddresses(),
         client.getAddressGroups(),
@@ -62,6 +74,44 @@ export default function AddressesPage() {
     loadData();
   }, [selectedServers]);
 
+  // Filter addresses based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredAddresses(addresses);
+    } else {
+      const term = searchTerm.toLowerCase();
+      const filtered = addresses.filter(addr => {
+        const searchableText = [
+          addr.name,
+          addr.type,
+          addr.subnet || '',
+          addr.fqdn || '',
+          addr.comment || '',
+        ].join(' ').toLowerCase();
+        return searchableText.includes(term);
+      });
+      setFilteredAddresses(filtered);
+    }
+  }, [addresses, searchTerm]);
+
+  // Filter groups based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredGroups(groups);
+    } else {
+      const term = searchTerm.toLowerCase();
+      const filtered = groups.filter(group => {
+        const searchableText = [
+          group.name,
+          ...toArray(group.member),
+          group.comment || '',
+        ].join(' ').toLowerCase();
+        return searchableText.includes(term);
+      });
+      setFilteredGroups(filtered);
+    }
+  }, [groups, searchTerm]);
+
   const handleAddressSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedServers.length === 0) {
@@ -78,7 +128,7 @@ export default function AddressesPage() {
         if (!server) continue;
 
         try {
-          const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+          const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
 
           if (editingAddress) {
             await client.updateAddress(editingAddress, addressFormData);
@@ -96,7 +146,7 @@ export default function AddressesPage() {
         }
       }
 
-      storage.addAuditLog({
+      await storage.addAuditLog({
         action: editingAddress ? 'update' : 'create',
         resourceType: 'address',
         resourceName: addressFormData.name,
@@ -111,7 +161,7 @@ export default function AddressesPage() {
       setShowAddressForm(false);
       setEditingAddress(null);
       setAddressFormData({ name: '', type: 'ipmask', subnet: '', comment: '' });
-      loadData();
+      await loadData();
     } catch (error) {
       alert('작업 실패: ' + (error as Error).message);
     } finally {
@@ -135,7 +185,7 @@ export default function AddressesPage() {
         if (!server) continue;
 
         try {
-          const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+          const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
 
           if (editingGroup) {
             await client.updateAddressGroup(editingGroup, groupFormData);
@@ -153,7 +203,7 @@ export default function AddressesPage() {
         }
       }
 
-      storage.addAuditLog({
+      await storage.addAuditLog({
         action: editingGroup ? 'update' : 'create',
         resourceType: 'addressGroup',
         resourceName: groupFormData.name,
@@ -168,7 +218,7 @@ export default function AddressesPage() {
       setShowGroupForm(false);
       setEditingGroup(null);
       setGroupFormData({ name: '', member: [], comment: '' });
-      loadData();
+      await loadData();
     } catch (error) {
       alert('작업 실패: ' + (error as Error).message);
     } finally {
@@ -188,7 +238,7 @@ export default function AddressesPage() {
         if (!server) continue;
 
         try {
-          const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+          const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
           await client.deleteAddress(name);
           results.push({ server: server.name, success: true });
         } catch (error) {
@@ -200,7 +250,7 @@ export default function AddressesPage() {
         }
       }
 
-      storage.addAuditLog({
+      await storage.addAuditLog({
         action: 'delete',
         resourceType: 'address',
         resourceName: name,
@@ -211,7 +261,7 @@ export default function AddressesPage() {
 
       const successCount = results.filter(r => r.success).length;
       alert(`${successCount}/${results.length} 서버에서 삭제 완료`);
-      loadData();
+      await loadData();
     } catch (error) {
       alert('삭제 실패: ' + (error as Error).message);
     } finally {
@@ -231,7 +281,7 @@ export default function AddressesPage() {
         if (!server) continue;
 
         try {
-          const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+          const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
           await client.deleteAddressGroup(name);
           results.push({ server: server.name, success: true });
         } catch (error) {
@@ -243,7 +293,7 @@ export default function AddressesPage() {
         }
       }
 
-      storage.addAuditLog({
+      await storage.addAuditLog({
         action: 'delete',
         resourceType: 'addressGroup',
         resourceName: name,
@@ -254,7 +304,7 @@ export default function AddressesPage() {
 
       const successCount = results.filter(r => r.success).length;
       alert(`${successCount}/${results.length} 서버에서 삭제 완료`);
-      loadData();
+      await loadData();
     } catch (error) {
       alert('삭제 실패: ' + (error as Error).message);
     } finally {
@@ -314,16 +364,31 @@ export default function AddressesPage() {
         {/* Address Tab */}
         {activeTab === 'addresses' && (
           <div className="space-y-4">
-            {!showAddressForm && (
-              <button
-                onClick={() => setShowAddressForm(true)}
-                disabled={selectedServers.length === 0}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Address 추가</span>
-              </button>
-            )}
+            <div className="flex items-center justify-between gap-4">
+              {!showAddressForm && (
+                <button
+                  onClick={() => setShowAddressForm(true)}
+                  disabled={selectedServers.length === 0}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Address 추가</span>
+                </button>
+              )}
+
+              <div className="flex-1 max-w-md">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Address 검색 (이름, 타입, 서브넷, FQDN 등...)"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
 
             {showAddressForm && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -466,9 +531,13 @@ export default function AddressesPage() {
                 <div className="p-8 text-center text-gray-500">
                   등록된 Address가 없습니다
                 </div>
+              ) : filteredAddresses.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  검색 결과가 없습니다
+                </div>
               ) : (
                 <div className="divide-y divide-gray-200">
-                  {addresses.map((addr) => (
+                  {filteredAddresses.map((addr) => (
                     <div key={addr.name} className="p-4 flex items-center justify-between hover:bg-gray-50">
                       <div>
                         <h3 className="font-medium text-gray-900">{addr.name}</h3>
@@ -511,16 +580,31 @@ export default function AddressesPage() {
         {/* Address Groups Tab */}
         {activeTab === 'groups' && (
           <div className="space-y-4">
-            {!showGroupForm && (
-              <button
-                onClick={() => setShowGroupForm(true)}
-                disabled={selectedServers.length === 0}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Address Group 추가</span>
-              </button>
-            )}
+            <div className="flex items-center justify-between gap-4">
+              {!showGroupForm && (
+                <button
+                  onClick={() => setShowGroupForm(true)}
+                  disabled={selectedServers.length === 0}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Address Group 추가</span>
+                </button>
+              )}
+
+              <div className="flex-1 max-w-md">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Address Group 검색 (이름, 멤버 등...)"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
 
             {showGroupForm && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -542,22 +626,13 @@ export default function AddressesPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      멤버 (Address 이름을 콤마로 구분)
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={groupFormData.member.join(', ')}
-                      onChange={(e) => setGroupFormData({
-                        ...groupFormData,
-                        member: e.target.value.split(',').map(m => m.trim()).filter(m => m)
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="address1, address2, address3"
-                    />
-                  </div>
+                  <MultiSelect
+                    label="멤버 (Addresses)"
+                    options={addresses.map(a => a.name)}
+                    selected={groupFormData.member}
+                    onChange={(selected) => setGroupFormData({ ...groupFormData, member: selected })}
+                    placeholder="Address 선택"
+                  />
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -605,14 +680,18 @@ export default function AddressesPage() {
                 <div className="p-8 text-center text-gray-500">
                   등록된 Address Group이 없습니다
                 </div>
+              ) : filteredGroups.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  검색 결과가 없습니다
+                </div>
               ) : (
                 <div className="divide-y divide-gray-200">
-                  {groups.map((group) => (
+                  {filteredGroups.map((group) => (
                     <div key={group.name} className="p-4 flex items-center justify-between hover:bg-gray-50">
                       <div className="flex-1">
                         <h3 className="font-medium text-gray-900">{group.name}</h3>
                         <p className="text-sm text-gray-600 mt-1">
-                          멤버 ({group.member.length}): {group.member.join(', ')}
+                          멤버 ({toArray(group.member).length}): {toArray(group.member).join(', ')}
                         </p>
                         {group.comment && (
                           <p className="text-xs text-gray-500 mt-1">{group.comment}</p>
@@ -621,7 +700,10 @@ export default function AddressesPage() {
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => {
-                            setGroupFormData(group);
+                            setGroupFormData({
+                              ...group,
+                              member: toArray(group.member),
+                            });
                             setEditingGroup(group.name);
                             setShowGroupForm(true);
                           }}

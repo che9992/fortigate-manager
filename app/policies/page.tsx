@@ -2,15 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { FortigateClient } from '@/lib/fortigate-client';
+import { FortigateClientProxy } from '@/lib/fortigate-client-proxy';
 import { storage } from '@/lib/storage';
 import { ServerSelector } from '@/components/ServerSelector';
-import { Plus, Trash2, Edit2, RefreshCw, Loader2, Shield, CheckCircle, XCircle } from 'lucide-react';
+import { MultiSelect } from '@/components/MultiSelect';
+import { Plus, Trash2, Edit2, RefreshCw, Loader2, Shield, CheckCircle, XCircle, Search } from 'lucide-react';
 import type { Policy } from '@/types';
 
 export default function PoliciesPage() {
   const { servers, selectedServers } = useStore();
   const [policies, setPolicies] = useState<Policy[]>([]);
+  const [filteredPolicies, setFilteredPolicies] = useState<Policy[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [interfaces, setInterfaces] = useState<string[]>([]);
   const [addresses, setAddresses] = useState<string[]>([]);
   const [services, setServices] = useState<string[]>([]);
@@ -18,6 +21,14 @@ export default function PoliciesPage() {
   const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<number | null>(null);
+
+  // Helper function to convert to array
+  const toArray = (value: any): string[] => {
+    if (Array.isArray(value)) return value.map(v => typeof v === 'object' ? v.name || String(v) : String(v));
+    if (typeof value === 'object' && value !== null) return [value.name || String(value)];
+    if (typeof value === 'string') return [value];
+    return [];
+  };
 
   const [formData, setFormData] = useState<Policy>({
     name: '',
@@ -41,7 +52,7 @@ export default function PoliciesPage() {
       const server = servers.find(s => s.id === selectedServers[0]);
       if (!server) return;
 
-      const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+      const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
       const [policyList, intfList, addrList, svcList] = await Promise.all([
         client.getPolicies(),
         client.getInterfaces(),
@@ -64,6 +75,32 @@ export default function PoliciesPage() {
     loadData();
   }, [selectedServers]);
 
+  // Filter policies based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredPolicies(policies);
+    } else {
+      const term = searchTerm.toLowerCase();
+      const filtered = policies.filter(policy => {
+        const searchableText = [
+          policy.name,
+          policy.policyid?.toString(),
+          policy.action,
+          policy.status,
+          policy.comments || '',
+          ...toArray(policy.srcintf),
+          ...toArray(policy.dstintf),
+          ...toArray(policy.srcaddr),
+          ...toArray(policy.dstaddr),
+          ...toArray(policy.service),
+        ].join(' ').toLowerCase();
+
+        return searchableText.includes(term);
+      });
+      setFilteredPolicies(filtered);
+    }
+  }, [policies, searchTerm]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedServers.length === 0) {
@@ -80,7 +117,7 @@ export default function PoliciesPage() {
         if (!server) continue;
 
         try {
-          const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+          const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
 
           if (editingPolicy !== null) {
             await client.updatePolicy(editingPolicy, formData);
@@ -98,7 +135,7 @@ export default function PoliciesPage() {
         }
       }
 
-      storage.addAuditLog({
+      await storage.addAuditLog({
         action: editingPolicy !== null ? 'update' : 'create',
         resourceType: 'policy',
         resourceName: formData.name,
@@ -125,7 +162,7 @@ export default function PoliciesPage() {
         status: 'enable',
         comments: '',
       });
-      loadData();
+      await loadData();
     } catch (error) {
       alert('작업 실패: ' + (error as Error).message);
     } finally {
@@ -145,7 +182,7 @@ export default function PoliciesPage() {
         if (!server) continue;
 
         try {
-          const client = new FortigateClient(server.host, server.apiKey, server.vdom);
+          const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
           await client.deletePolicy(policyId);
           results.push({ server: server.name, success: true });
         } catch (error) {
@@ -157,7 +194,7 @@ export default function PoliciesPage() {
         }
       }
 
-      storage.addAuditLog({
+      await storage.addAuditLog({
         action: 'delete',
         resourceType: 'policy',
         resourceName: name,
@@ -168,7 +205,7 @@ export default function PoliciesPage() {
 
       const successCount = results.filter(r => r.success).length;
       alert(`${successCount}/${results.length} 서버에서 삭제 완료`);
-      loadData();
+      await loadData();
     } catch (error) {
       alert('삭제 실패: ' + (error as Error).message);
     } finally {
@@ -195,16 +232,31 @@ export default function PoliciesPage() {
           </button>
         </div>
 
-        {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            disabled={selectedServers.length === 0}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Policy 추가</span>
-          </button>
-        )}
+        <div className="flex items-center justify-between gap-4">
+          {!showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              disabled={selectedServers.length === 0}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Policy 추가</span>
+            </button>
+          )}
+
+          <div className="flex-1 max-w-md">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Policy 검색 (이름, ID, Interface, Address, Service 등...)"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+        </div>
 
         {showForm && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -226,98 +278,49 @@ export default function PoliciesPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Source Interface (콤마로 구분)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.srcintf.join(', ')}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      srcintf: e.target.value.split(',').map(i => i.trim()).filter(i => i)
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="port1, port2"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">사용 가능: {interfaces.slice(0, 5).join(', ')}</p>
-                </div>
+                <MultiSelect
+                  label="Source Interface"
+                  options={interfaces}
+                  selected={formData.srcintf}
+                  onChange={(selected) => setFormData({ ...formData, srcintf: selected })}
+                  placeholder="인터페이스 선택"
+                />
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Destination Interface (콤마로 구분)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.dstintf.join(', ')}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      dstintf: e.target.value.split(',').map(i => i.trim()).filter(i => i)
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="port1, port2"
-                  />
-                </div>
+                <MultiSelect
+                  label="Destination Interface"
+                  options={interfaces}
+                  selected={formData.dstintf}
+                  onChange={(selected) => setFormData({ ...formData, dstintf: selected })}
+                  placeholder="인터페이스 선택"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Source Address (콤마로 구분)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.srcaddr.join(', ')}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      srcaddr: e.target.value.split(',').map(a => a.trim()).filter(a => a)
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="all, address1"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {addresses.length > 0 ? `등록된 주소 ${addresses.length}개` : 'Address를 먼저 생성하세요'}
-                  </p>
-                </div>
+                <MultiSelect
+                  label="Source Address"
+                  options={addresses}
+                  selected={formData.srcaddr}
+                  onChange={(selected) => setFormData({ ...formData, srcaddr: selected })}
+                  placeholder="주소 선택"
+                />
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Destination Address (콤마로 구분)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.dstaddr.join(', ')}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      dstaddr: e.target.value.split(',').map(a => a.trim()).filter(a => a)
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="all, address2"
-                  />
-                </div>
+                <MultiSelect
+                  label="Destination Address"
+                  options={addresses}
+                  selected={formData.dstaddr}
+                  onChange={(selected) => setFormData({ ...formData, dstaddr: selected })}
+                  placeholder="주소 선택"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Service (콤마로 구분)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.service.join(', ')}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      service: e.target.value.split(',').map(s => s.trim()).filter(s => s)
-                    })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="ALL, HTTP, HTTPS"
-                  />
-                </div>
+                <MultiSelect
+                  label="Service"
+                  options={services}
+                  selected={formData.service}
+                  onChange={(selected) => setFormData({ ...formData, service: selected })}
+                  placeholder="서비스 선택"
+                />
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -434,9 +437,14 @@ export default function PoliciesPage() {
               <Shield className="h-12 w-12 mx-auto mb-3 text-gray-400" />
               <p>등록된 Policy가 없습니다</p>
             </div>
+          ) : filteredPolicies.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <Shield className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+              <p>검색 결과가 없습니다</p>
+            </div>
           ) : (
             <div className="divide-y divide-gray-200">
-              {policies.map((policy) => (
+              {filteredPolicies.map((policy) => (
                 <div key={policy.policyid} className="p-4 hover:bg-gray-50">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -471,18 +479,18 @@ export default function PoliciesPage() {
                         <div>
                           <span className="text-gray-600">Source: </span>
                           <span className="text-gray-900">
-                            {policy.srcintf.join(', ')} → {policy.srcaddr.join(', ')}
+                            {toArray(policy.srcintf).join(', ')} → {toArray(policy.srcaddr).join(', ')}
                           </span>
                         </div>
                         <div>
                           <span className="text-gray-600">Destination: </span>
                           <span className="text-gray-900">
-                            {policy.dstintf.join(', ')} → {policy.dstaddr.join(', ')}
+                            {toArray(policy.dstintf).join(', ')} → {toArray(policy.dstaddr).join(', ')}
                           </span>
                         </div>
                         <div>
                           <span className="text-gray-600">Service: </span>
-                          <span className="text-gray-900">{policy.service.join(', ')}</span>
+                          <span className="text-gray-900">{toArray(policy.service).join(', ')}</span>
                         </div>
                         <div>
                           <span className="text-gray-600">Action: </span>
@@ -500,7 +508,14 @@ export default function PoliciesPage() {
                     <div className="flex items-center space-x-2 ml-4">
                       <button
                         onClick={() => {
-                          setFormData(policy);
+                          setFormData({
+                            ...policy,
+                            srcintf: toArray(policy.srcintf),
+                            dstintf: toArray(policy.dstintf),
+                            srcaddr: toArray(policy.srcaddr),
+                            dstaddr: toArray(policy.dstaddr),
+                            service: toArray(policy.service),
+                          });
                           setEditingPolicy(policy.policyid || null);
                           setShowForm(true);
                         }}

@@ -1,55 +1,85 @@
 import type { FortigateServer, AuditLog } from '@/types';
 
-const SERVERS_KEY = 'fortigate_servers';
-const AUDIT_LOGS_KEY = 'fortigate_audit_logs';
-
 export const storage = {
   // Server Management
-  getServers(): FortigateServer[] {
+  async getServers(): Promise<FortigateServer[]> {
     if (typeof window === 'undefined') return [];
-    const data = localStorage.getItem(SERVERS_KEY);
-    return data ? JSON.parse(data) : [];
-  },
-
-  saveServers(servers: FortigateServer[]): void {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(SERVERS_KEY, JSON.stringify(servers));
-  },
-
-  addServer(server: FortigateServer): void {
-    const servers = this.getServers();
-    servers.push(server);
-    this.saveServers(servers);
-  },
-
-  updateServer(id: string, updates: Partial<FortigateServer>): void {
-    const servers = this.getServers();
-    const index = servers.findIndex(s => s.id === id);
-    if (index !== -1) {
-      servers[index] = { ...servers[index], ...updates };
-      this.saveServers(servers);
+    try {
+      const response = await fetch('/api/servers');
+      if (!response.ok) throw new Error('Failed to fetch servers');
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get servers:', error);
+      return [];
     }
   },
 
-  deleteServer(id: string): void {
-    const servers = this.getServers().filter(s => s.id !== id);
-    this.saveServers(servers);
+  async saveServers(servers: FortigateServer[]): Promise<void> {
+    // This method is deprecated - use addServer, updateServer, deleteServer instead
+    console.warn('saveServers is deprecated');
+  },
+
+  async addServer(server: FortigateServer): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      const response = await fetch('/api/servers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(server),
+      });
+      if (!response.ok) throw new Error('Failed to add server');
+    } catch (error) {
+      console.error('Failed to add server:', error);
+      throw error;
+    }
+  },
+
+  async updateServer(id: string, updates: Partial<FortigateServer>): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      const response = await fetch(`/api/servers/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) throw new Error('Failed to update server');
+    } catch (error) {
+      console.error('Failed to update server:', error);
+      throw error;
+    }
+  },
+
+  async deleteServer(id: string): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      const response = await fetch(`/api/servers/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete server');
+    } catch (error) {
+      console.error('Failed to delete server:', error);
+      throw error;
+    }
   },
 
   // Audit Logs
-  getAuditLogs(): AuditLog[] {
+  async getAuditLogs(): Promise<AuditLog[]> {
     if (typeof window === 'undefined') return [];
-    const data = localStorage.getItem(AUDIT_LOGS_KEY);
-    if (!data) return [];
-
-    const logs = JSON.parse(data);
-    return logs.map((log: any) => ({
-      ...log,
-      timestamp: new Date(log.timestamp),
-    }));
+    try {
+      const response = await fetch('/api/logs');
+      if (!response.ok) throw new Error('Failed to fetch logs');
+      const logs = await response.json();
+      return logs.map((log: any) => ({
+        ...log,
+        timestamp: new Date(log.timestamp),
+      }));
+    } catch (error) {
+      console.error('Failed to get audit logs:', error);
+      return [];
+    }
   },
 
-  addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): void {
+  async addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): Promise<void> {
     if (typeof window === 'undefined') return;
 
     // 현재 로그인된 사용자 정보 가져오기
@@ -66,23 +96,29 @@ export const storage = {
       }
     }
 
-    const logs = this.getAuditLogs();
-    const newLog: AuditLog = {
-      ...log,
-      user: currentUser,
-      id: Date.now().toString(),
-      timestamp: new Date(),
-    };
-
-    logs.unshift(newLog);
-
-    // Keep only last 1000 logs
-    const trimmedLogs = logs.slice(0, 1000);
-    localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(trimmedLogs));
+    try {
+      const response = await fetch('/api/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...log, user: currentUser }),
+      });
+      if (!response.ok) throw new Error('Failed to add audit log');
+    } catch (error) {
+      console.error('Failed to add audit log:', error);
+      throw error;
+    }
   },
 
-  clearAuditLogs(): void {
+  async clearAuditLogs(): Promise<void> {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem(AUDIT_LOGS_KEY);
+    try {
+      const response = await fetch('/api/logs', {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to clear audit logs');
+    } catch (error) {
+      console.error('Failed to clear audit logs:', error);
+      throw error;
+    }
   },
 };
