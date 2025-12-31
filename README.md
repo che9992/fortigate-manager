@@ -4,12 +4,32 @@ FortiGate 여러 대를 한 번에 관리할 수 있는 웹 기반 통합 관리
 
 ## 주요 기능
 
-- **인증 시스템**: 안전한 로그인으로 보호된 접근
-- **멀티 서버 관리**: 여러 FortiGate 서버를 하나의 인터페이스에서 관리
-- **Address 관리**: Address와 Address Group을 모든 서버에 동시에 생성/수정/삭제
-- **Policy 관리**: 방화벽 정책을 여러 서버에 동시에 적용
-- **감사 로그**: 모든 변경 사항을 자동으로 기록하고 추적 (사용자 정보 포함)
-- **실시간 서버 상태**: 대시보드에서 모든 서버의 상태를 한눈에 확인
+### 🔥 멀티 서버 관리
+- 여러 FortiGate 서버를 하나의 대시보드에서 통합 관리
+- 서버별 개별 설정 및 전체 서버 일괄 적용 지원
+- 서버 상태 실시간 모니터링
+
+### 📍 Address 관리
+- FQDN, IPv4/IPv6 Address 생성 및 관리
+- Address Group 관리
+- MultiSelect UI로 간편한 선택
+
+### 🛡️ Policy 관리
+- 보안 정책 생성, 수정, 삭제
+- Source/Destination Interface, Address, Service 선택
+- 정책 검색 기능
+- **MultiSelect 드롭다운으로 직관적인 UI** (타이핑 대신 클릭으로 선택)
+
+### 🌐 도메인 분석기
+- Puppeteer 기반 웹사이트 도메인 자동 분석
+- 메인 도메인, CDN, API, Analytics 등 자동 분류
+- **블랙리스트 필터링** (SNS, 광고 도메인 자동 제외)
+- **분석 결과를 Address Group으로 자동 생성**
+
+### 📊 감사 로그
+- 모든 변경 사항 자동 기록
+- 작업 이력 추적 및 관리
+- 서버별, 리소스별 필터링
 
 ## 시작하기
 
@@ -87,21 +107,33 @@ FortiGate 웹 인터페이스에서:
 6. "OK" 클릭하면 API Key가 생성됨
 7. 생성된 API Key를 복사하여 FortiGate Manager에 입력
 
-### 3. Address 관리
+### 3. 도메인 분석 및 자동 그룹 생성 (NEW!)
+
+1. "도메인 분석" 메뉴 클릭
+2. 분석할 도메인 입력 (예: example.com)
+3. 블랙리스트 키워드 설정 (불필요한 도메인 제외)
+4. "분석 시작" 클릭
+5. 결과에서 필요한 도메인 선택
+6. 그룹 이름 입력 후 "그룹 생성" 클릭
+7. 선택된 모든 서버에 Address 및 Group 자동 생성
+
+### 4. Address 관리
 
 1. "Address 관리" 메뉴 클릭
 2. 적용할 서버 선택 (좌측 패널)
 3. "Address 추가" 버튼으로 새 Address 생성
 4. Address Group 탭에서 그룹 관리
+5. **MultiSelect로 멤버 선택** - 타이핑 대신 클릭
 
-### 4. Policy 관리
+### 5. Policy 관리
 
 1. "Policy 관리" 메뉴 클릭
 2. 적용할 서버 선택
 3. "Policy 추가" 버튼으로 새 정책 생성
-4. Source/Destination Interface, Address, Service 등 설정
+4. **MultiSelect 드롭다운**에서 Interface, Address, Service 선택
+5. 정책 검색 기능으로 빠른 필터링
 
-### 5. 감사 로그 확인
+### 6. 감사 로그 확인
 
 1. "감사 로그" 메뉴 클릭
 2. 필터를 사용하여 특정 작업/리소스/상태별로 로그 확인
@@ -109,19 +141,31 @@ FortiGate 웹 인터페이스에서:
 
 ## 기술 스택
 
-- **Frontend**: Next.js 14, React 18, TypeScript
+- **Frontend**: Next.js 14 (App Router), React 18, TypeScript
 - **Styling**: Tailwind CSS
 - **State Management**: Zustand
 - **HTTP Client**: Axios
+- **Web Scraping**: Puppeteer (도메인 분석)
 - **Icons**: Lucide React
-- **Deployment**: Vercel
+- **Date Handling**: date-fns
+- **Storage**: File-based JSON (data/)
+
+## 데이터 저장
+
+모든 데이터는 `data/` 디렉토리에 JSON 파일로 저장됩니다:
+- `data/servers.json`: FortiGate 서버 설정 (API 키 포함)
+- `data/audit-logs.json`: 감사 로그
+
+**⚠️ 주의**: `data/` 디렉토리에는 API 키가 포함되어 있으므로 `.gitignore`에 포함되어 있습니다.
 
 ## 보안 고려사항
 
-- API Key는 브라우저의 localStorage에 저장됩니다
-- 프로덕션 환경에서는 HTTPS 사용을 권장합니다
-- FortiGate API Key는 최소 권한 원칙에 따라 필요한 권한만 부여하세요
-- Trusted Hosts 설정으로 API 접근을 특정 IP로 제한하세요
+- FortiGate API 키는 로컬 `data/` 디렉토리에만 저장
+- 모든 FortiGate API 요청은 Next.js API Routes를 통한 프록시 패턴 사용
+- CORS 문제 해결 및 클라이언트 측 API 키 노출 방지
+- 프로덕션 환경에서는 HTTPS 사용 권장
+- FortiGate API Key는 최소 권한 원칙에 따라 필요한 권한만 부여
+- Trusted Hosts 설정으로 API 접근을 특정 IP로 제한
 
 ## 문제 해결
 
