@@ -52,9 +52,24 @@ export const storage = {
   addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): void {
     if (typeof window === 'undefined') return;
 
+    // 현재 로그인된 사용자 정보 가져오기
+    let currentUser = log.user;
+    if (!currentUser) {
+      try {
+        const authData = localStorage.getItem('fortigate_auth');
+        if (authData) {
+          const auth = JSON.parse(authData);
+          currentUser = auth.user || undefined;
+        }
+      } catch (error) {
+        // 에러 무시
+      }
+    }
+
     const logs = this.getAuditLogs();
     const newLog: AuditLog = {
       ...log,
+      user: currentUser,
       id: Date.now().toString(),
       timestamp: new Date(),
     };

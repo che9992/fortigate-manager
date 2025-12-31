@@ -11,6 +11,10 @@ npm run dev
 
 브라우저에서 http://localhost:3000 접속
 
+**로그인 정보:**
+- 이메일: `che9992@edusherpa.kr`
+- 비밀번호: `!05240425aa`
+
 ## 📦 Vercel에 바로 배포하기
 
 ### 단계 1: GitHub 저장소 생성 및 푸시
