@@ -9,12 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^143.0.0",
     "@upstash/redis": "^1.36.0",
     "axios": "^1.6.2",
     "date-fns": "^3.0.6",
     "lucide-react": "^0.303.0",
     "next": "^14.0.4",
-    "puppeteer": "^24.34.0",
+    "puppeteer-core": "^24.34.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "zustand": "^4.4.7"

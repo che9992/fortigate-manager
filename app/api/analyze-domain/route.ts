@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
 interface DomainInfo {
   domain: string;
@@ -40,15 +41,12 @@ export async function POST(request: NextRequest) {
     const domains = new Set<string>();
     const domainInfo: { [key: string]: DomainInfo } = {};
 
-    // Launch headless browser
+    // Launch headless browser with serverless-compatible settings
     browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: { width: 1280, height: 720 },
+      executablePath: await chromium.executablePath(),
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-      ],
     });
 
     const page = await browser.newPage();
