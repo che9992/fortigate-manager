@@ -8,7 +8,8 @@
       "Bash(npm uninstall:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nSwitch from Vercel KV to Upstash Redis\n\nVercel KV moved to Marketplace, using Upstash Redis instead.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(curl:*)"
     ]
   }
 }

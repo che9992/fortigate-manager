@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Globe, Search, Loader2, Plus, CheckCircle, Users, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Globe, Search, Loader2, Plus, CheckCircle, Users, X, Server, RefreshCw } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { FortigateClientProxy } from '@/lib/fortigate-client-proxy';
 import { storage } from '@/lib/storage';
@@ -10,6 +10,16 @@ interface DomainInfo {
   domain: string;
   type: 'main' | 'resource' | 'api' | 'cdn' | 'analytics';
   description?: string;
+}
+
+interface ServerRegistration {
+  serverId: string;
+  serverName: string;
+  registered: boolean;
+}
+
+interface DomainRegistrationStatus {
+  [domain: string]: ServerRegistration[];
 }
 
 export default function DomainAnalyzerPage() {
@@ -23,6 +33,8 @@ export default function DomainAnalyzerPage() {
   const [adding, setAdding] = useState(false);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [registrationStatus, setRegistrationStatus] = useState<DomainRegistrationStatus>({});
+  const [checkingStatus, setCheckingStatus] = useState(false);
 
   const addToBlocklist = () => {
     if (!newBlockItem.trim()) return;
@@ -39,6 +51,43 @@ export default function DomainAnalyzerPage() {
   const isBlocked = (domain: string): boolean => {
     const lowerDomain = domain.toLowerCase();
     return blocklist.some(blocked => lowerDomain.includes(blocked));
+  };
+
+  // Check registration status for all domains
+  const checkRegistrationStatus = async (domainList: string[]) => {
+    if (servers.length === 0 || domainList.length === 0) return;
+
+    setCheckingStatus(true);
+    try {
+      const response = await fetch('/api/fortigate/check-domains', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domains: domainList,
+          servers: servers.map(s => ({
+            id: s.id,
+            name: s.name,
+            host: s.host,
+            apiKey: s.apiKey,
+            vdom: s.vdom,
+          })),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.results) {
+        const statusMap: DomainRegistrationStatus = {};
+        for (const item of result.results) {
+          statusMap[item.domain] = item.servers;
+        }
+        setRegistrationStatus(statusMap);
+      }
+    } catch (error) {
+      console.error('Failed to check registration status:', error);
+    } finally {
+      setCheckingStatus(false);
+    }
   };
 
   const analyzeDomain = async () => {
@@ -72,6 +121,11 @@ export default function DomainAnalyzerPage() {
       setDomains(filteredDomains);
       // Select all by default
       setSelectedDomains(new Set(filteredDomains.map((d: DomainInfo) => d.domain)));
+
+      // Check registration status for all domains
+      if (filteredDomains.length > 0 && servers.length > 0) {
+        checkRegistrationStatus(filteredDomains.map((d: DomainInfo) => d.domain));
+      }
 
       if (blockedCount > 0) {
         alert(`총 ${result.domains.length}개 도메인 발견\n블랙리스트 필터링: ${blockedCount}개 제외됨\n표시: ${filteredDomains.length}개`);
@@ -407,9 +461,19 @@ export default function DomainAnalyzerPage() {
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
                   {selectedDomains.size}개 선택됨
+                  {checkingStatus && <span className="ml-2 text-blue-600">등록 상태 확인 중...</span>}
                 </p>
               </div>
               <div className="flex gap-2">
+                <button
+                  onClick={() => checkRegistrationStatus(domains.map(d => d.domain))}
+                  disabled={checkingStatus || servers.length === 0}
+                  className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
+                  title="등록 상태 새로고침"
+                >
+                  <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
+                  <span>상태 확인</span>
+                </button>
                 <button
                   onClick={addToFortigate}
                   disabled={adding || selectedDomains.size === 0 || selectedServers.length === 0}
@@ -468,42 +532,73 @@ export default function DomainAnalyzerPage() {
           </div>
 
           <div className="divide-y divide-gray-200">
-            {domains.map((domainInfo) => (
-              <div
-                key={domainInfo.domain}
-                className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                  selectedDomains.has(domainInfo.domain) ? 'bg-blue-50' : ''
-                }`}
-                onClick={() => toggleDomain(domainInfo.domain)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 flex-1">
-                    <div className="flex-shrink-0">
-                      {selectedDomains.has(domainInfo.domain) ? (
-                        <CheckCircle className="h-5 w-5 text-blue-600" />
-                      ) : (
-                        <div className="h-5 w-5 border-2 border-gray-300 rounded-full" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-medium text-gray-900">
-                          {domainInfo.domain}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${getTypeColor(domainInfo.type)}`}>
-                          {getTypeLabel(domainInfo.type)}
-                        </span>
+            {domains.map((domainInfo) => {
+              const status = registrationStatus[domainInfo.domain];
+              const registeredServers = status?.filter(s => s.registered) || [];
+              const allRegistered = status && status.length > 0 && registeredServers.length === status.length;
+              const someRegistered = registeredServers.length > 0 && registeredServers.length < (status?.length || 0);
+
+              return (
+                <div
+                  key={domainInfo.domain}
+                  className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
+                    selectedDomains.has(domainInfo.domain) ? 'bg-blue-50' : ''
+                  }`}
+                  onClick={() => toggleDomain(domainInfo.domain)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3 flex-1">
+                      <div className="flex-shrink-0">
+                        {selectedDomains.has(domainInfo.domain) ? (
+                          <CheckCircle className="h-5 w-5 text-blue-600" />
+                        ) : (
+                          <div className="h-5 w-5 border-2 border-gray-300 rounded-full" />
+                        )}
                       </div>
-                      {domainInfo.description && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          {domainInfo.description}
-                        </p>
-                      )}
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium text-gray-900">
+                            {domainInfo.domain}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${getTypeColor(domainInfo.type)}`}>
+                            {getTypeLabel(domainInfo.type)}
+                          </span>
+                        </div>
+                        {domainInfo.description && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            {domainInfo.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {/* Server registration status */}
+                    <div className="flex items-center space-x-2 ml-4">
+                      {status ? (
+                        <div className="flex flex-wrap gap-1">
+                          {status.map((s) => (
+                            <span
+                              key={s.serverId}
+                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                s.registered
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-gray-100 text-gray-500'
+                              }`}
+                              title={s.registered ? `${s.serverName}에 등록됨` : `${s.serverName}에 미등록`}
+                            >
+                              <Server className="h-3 w-3 mr-1" />
+                              {s.serverName}
+                              {s.registered && <CheckCircle className="h-3 w-3 ml-1" />}
+                            </span>
+                          ))}
+                        </div>
+                      ) : checkingStatus ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      ) : null}
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
