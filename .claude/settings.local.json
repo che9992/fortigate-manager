@@ -6,7 +6,9 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nMigrate from file-based storage to Vercel KV\n\n- Replace fs-based db.ts with @vercel/kv implementation\n- Update all API routes to use async/await\n- Add /api/servers/init endpoint for initial server setup\n- Fix scripts/init-servers.ts to use async functions\n\nThis enables persistent data storage on Vercel''s serverless platform.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(npm uninstall:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nSwitch from Vercel KV to Upstash Redis\n\nVercel KV moved to Marketplace, using Upstash Redis instead.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nSwitch from Vercel KV to Upstash Redis\n\nVercel KV moved to Marketplace, using Upstash Redis instead.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
