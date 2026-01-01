@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 
 export async function GET() {
   try {
-    const servers = db.getServers();
+    const servers = await db.getServers();
     return NextResponse.json(servers);
   } catch (error) {
     console.error('Failed to get servers:', error);
@@ -14,7 +14,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const server = await request.json();
-    db.addServer(server);
+    await db.addServer(server);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to add server:', error);

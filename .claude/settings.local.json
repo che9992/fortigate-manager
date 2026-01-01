@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nMigrate from file-based storage to Vercel KV\n\n- Replace fs-based db.ts with @vercel/kv implementation\n- Update all API routes to use async/await\n- Add /api/servers/init endpoint for initial server setup\n- Fix scripts/init-servers.ts to use async functions\n\nThis enables persistent data storage on Vercel''s serverless platform.\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+    ]
+  }
+}

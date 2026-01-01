@@ -1,67 +1,52 @@
-import fs from 'fs';
-import path from 'path';
+import { kv } from '@vercel/kv';
 import type { FortigateServer, AuditLog } from '@/types';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const SERVERS_FILE = path.join(DATA_DIR, 'servers.json');
-const LOGS_FILE = path.join(DATA_DIR, 'logs.json');
-
-// 데이터 디렉토리 생성
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// 초기 파일 생성
-if (!fs.existsSync(SERVERS_FILE)) {
-  fs.writeFileSync(SERVERS_FILE, JSON.stringify([]));
-}
-if (!fs.existsSync(LOGS_FILE)) {
-  fs.writeFileSync(LOGS_FILE, JSON.stringify([]));
-}
+const SERVERS_KEY = 'fortigate:servers';
+const LOGS_KEY = 'fortigate:logs';
 
 export const db = {
   // Server Management
-  getServers(): FortigateServer[] {
-    const data = fs.readFileSync(SERVERS_FILE, 'utf-8');
-    return JSON.parse(data);
+  async getServers(): Promise<FortigateServer[]> {
+    const servers = await kv.get<FortigateServer[]>(SERVERS_KEY);
+    return servers || [];
   },
 
-  saveServers(servers: FortigateServer[]): void {
-    fs.writeFileSync(SERVERS_FILE, JSON.stringify(servers, null, 2));
+  async saveServers(servers: FortigateServer[]): Promise<void> {
+    await kv.set(SERVERS_KEY, servers);
   },
 
-  addServer(server: FortigateServer): void {
-    const servers = this.getServers();
+  async addServer(server: FortigateServer): Promise<void> {
+    const servers = await this.getServers();
     servers.push(server);
-    this.saveServers(servers);
+    await this.saveServers(servers);
   },
 
-  updateServer(id: string, updates: Partial<FortigateServer>): void {
-    const servers = this.getServers();
+  async updateServer(id: string, updates: Partial<FortigateServer>): Promise<void> {
+    const servers = await this.getServers();
     const index = servers.findIndex(s => s.id === id);
     if (index !== -1) {
       servers[index] = { ...servers[index], ...updates };
-      this.saveServers(servers);
+      await this.saveServers(servers);
     }
   },
 
-  deleteServer(id: string): void {
-    const servers = this.getServers().filter(s => s.id !== id);
-    this.saveServers(servers);
+  async deleteServer(id: string): Promise<void> {
+    const servers = (await this.getServers()).filter(s => s.id !== id);
+    await this.saveServers(servers);
   },
 
   // Audit Logs
-  getAuditLogs(): AuditLog[] {
-    const data = fs.readFileSync(LOGS_FILE, 'utf-8');
-    const logs = JSON.parse(data);
+  async getAuditLogs(): Promise<AuditLog[]> {
+    const logs = await kv.get<AuditLog[]>(LOGS_KEY);
+    if (!logs) return [];
     return logs.map((log: any) => ({
       ...log,
       timestamp: new Date(log.timestamp),
     }));
   },
 
-  addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): void {
-    const logs = this.getAuditLogs();
+  async addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): Promise<void> {
+    const logs = await this.getAuditLogs();
     const newLog: AuditLog = {
       ...log,
       id: Date.now().toString(),
@@ -72,10 +57,10 @@ export const db = {
 
     // Keep only last 1000 logs
     const trimmedLogs = logs.slice(0, 1000);
-    fs.writeFileSync(LOGS_FILE, JSON.stringify(trimmedLogs, null, 2));
+    await kv.set(LOGS_KEY, trimmedLogs);
   },
 
-  clearAuditLogs(): void {
-    fs.writeFileSync(LOGS_FILE, JSON.stringify([]));
+  async clearAuditLogs(): Promise<void> {
+    await kv.set(LOGS_KEY, []);
   },
 };

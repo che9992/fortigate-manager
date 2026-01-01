@@ -6,8 +6,9 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = await params;
     const updates = await request.json();
-    db.updateServer(params.id, updates);
+    await db.updateServer(id, updates);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to update server:', error);
@@ -20,7 +21,8 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    db.deleteServer(params.id);
+    const { id } = await params;
+    await db.deleteServer(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to delete server:', error);

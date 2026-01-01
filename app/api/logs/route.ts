@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 
 export async function GET() {
   try {
-    const logs = db.getAuditLogs();
+    const logs = await db.getAuditLogs();
     return NextResponse.json(logs);
   } catch (error) {
     console.error('Failed to get audit logs:', error);
@@ -14,7 +14,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const log = await request.json();
-    db.addAuditLog(log);
+    await db.addAuditLog(log);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to add audit log:', error);
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 
 export async function DELETE() {
   try {
-    db.clearAuditLogs();
+    await db.clearAuditLogs();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to clear audit logs:', error);

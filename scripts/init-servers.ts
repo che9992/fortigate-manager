@@ -31,14 +31,14 @@ const initialServers: FortigateServer[] = [
 async function initServers() {
   console.log('Initializing FortiGate servers...');
 
-  const existingServers = db.getServers();
+  const existingServers = await db.getServers();
 
   if (existingServers.length > 0) {
     console.log(`Found ${existingServers.length} existing servers. Skipping initialization.`);
     return;
   }
 
-  db.saveServers(initialServers);
+  await db.saveServers(initialServers);
   console.log(`Successfully added ${initialServers.length} servers:`);
   initialServers.forEach(s => {
     console.log(`  - ${s.name} (${s.host})`);
