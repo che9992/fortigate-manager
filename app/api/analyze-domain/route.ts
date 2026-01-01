@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+import chromium from '@sparticuz/chromium-min';
 
 interface DomainInfo {
   domain: string;
@@ -10,6 +10,9 @@ interface DomainInfo {
 
 // Helper to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Remote chromium URL for Vercel serverless
+const CHROMIUM_URL = 'https://github.com/nicholasjackson/chromium-binaries/releases/download/v131.0.6778.204/chromium-v131.0.6778.204-pack.tar';
 
 export async function POST(request: NextRequest) {
   let browser = null;
@@ -41,11 +44,14 @@ export async function POST(request: NextRequest) {
     const domains = new Set<string>();
     const domainInfo: { [key: string]: DomainInfo } = {};
 
+    // Get executable path from remote URL
+    const executablePath = await chromium.executablePath(CHROMIUM_URL);
+
     // Launch headless browser with serverless-compatible settings
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: { width: 1280, height: 720 },
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: true,
     });
 

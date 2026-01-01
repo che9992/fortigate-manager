@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^143.0.0",
+    "@sparticuz/chromium-min": "^143.0.0",
     "@upstash/redis": "^1.36.0",
     "axios": "^1.6.2",
     "date-fns": "^3.0.6",
