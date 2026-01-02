@@ -704,7 +704,7 @@ export default function AddressesPage() {
                   <MultiSelect
                     label="멤버 (Addresses)"
                     options={addresses.map(a => a.name)}
-                    selected={groupFormData.member}
+                    selected={toArray(groupFormData.member)}
                     onChange={(selected) => setGroupFormData({ ...groupFormData, member: selected })}
                     placeholder="Address 선택"
                   />

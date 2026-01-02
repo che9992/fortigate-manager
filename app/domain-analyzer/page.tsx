@@ -391,7 +391,7 @@ export default function DomainAnalyzerPage() {
             groupData.comment = groupComment.trim();
           }
 
-          console.log(`[Group Creation] Creating group on ${server.name}:`, groupData);
+          console.log(`[Group Creation] Creating group on ${server.name}:`, JSON.stringify(groupData, null, 2));
           await client.createAddressGroup(groupData);
 
           results.push({ server: server.name, success: true });

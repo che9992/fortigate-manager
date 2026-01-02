@@ -16,6 +16,7 @@ export default function PoliciesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [interfaces, setInterfaces] = useState<string[]>([]);
   const [addresses, setAddresses] = useState<string[]>([]);
+  const [addressGroups, setAddressGroups] = useState<string[]>([]);
   const [services, setServices] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -61,16 +62,19 @@ export default function PoliciesPage() {
       if (!server) return;
 
       const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
-      const [policyList, intfList, addrList, svcList] = await Promise.all([
+      const [policyList, intfList, addrList, addrGrpList, svcList] = await Promise.all([
         client.getPolicies(),
         client.getInterfaces(),
         client.getAddresses(),
+        client.getAddressGroups(),
         client.getServices(),
       ]);
 
       setPolicies(policyList);
       setInterfaces(intfList.map(i => i.name));
       setAddresses(addrList.map(a => a.name));
+      // Prefix address groups with 📁 to distinguish them visually
+      setAddressGroups(addrGrpList.map(g => `📁 ${g.name}`));
       setServices(svcList.map(s => s.name));
     } catch (error) {
       alert('데이터 로드 실패: ' + (error as Error).message);
@@ -129,8 +133,16 @@ export default function PoliciesPage() {
 
     setSyncing(true);
     const results = [];
+    let createdPolicyId: number | null = null;
 
     try {
+      // Remove 📁 prefix from address groups before sending to FortiGate
+      const cleanFormData = {
+        ...formData,
+        srcaddr: formData.srcaddr.map(addr => addr.replace('📁 ', '')),
+        dstaddr: formData.dstaddr.map(addr => addr.replace('📁 ', '')),
+      };
+
       for (const serverId of selectedServers) {
         const server = servers.find(s => s.id === serverId);
         if (!server) continue;
@@ -139,9 +151,17 @@ export default function PoliciesPage() {
           const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
 
           if (editingPolicy !== null) {
-            await client.updatePolicy(editingPolicy, formData);
+            await client.updatePolicy(editingPolicy, cleanFormData);
           } else {
-            await client.createPolicy(formData);
+            await client.createPolicy(cleanFormData);
+            // Get the created policy ID from the first server
+            if (createdPolicyId === null) {
+              const policies = await client.getPolicies();
+              const created = policies.find(p => p.name === cleanFormData.name);
+              if (created?.policyid) {
+                createdPolicyId = created.policyid;
+              }
+            }
           }
 
           results.push({ server: server.name, success: true });
@@ -182,6 +202,11 @@ export default function PoliciesPage() {
         comments: '',
       });
       await loadData();
+
+      // If policy was created successfully, open move modal
+      if (createdPolicyId !== null && editingPolicy === null) {
+        setMovingPolicy(createdPolicyId);
+      }
     } catch (error) {
       alert('작업 실패: ' + (error as Error).message);
     } finally {
@@ -398,18 +423,18 @@ export default function PoliciesPage() {
               <div className="grid grid-cols-2 gap-4">
                 <MultiSelect
                   label="Source Address"
-                  options={addresses}
+                  options={[...addresses, ...addressGroups]}
                   selected={formData.srcaddr}
                   onChange={(selected) => setFormData({ ...formData, srcaddr: selected })}
-                  placeholder="주소 선택"
+                  placeholder="주소 또는 그룹 선택"
                 />
 
                 <MultiSelect
                   label="Destination Address"
-                  options={addresses}
+                  options={[...addresses, ...addressGroups]}
                   selected={formData.dstaddr}
                   onChange={(selected) => setFormData({ ...formData, dstaddr: selected })}
-                  placeholder="주소 선택"
+                  placeholder="주소 또는 그룹 선택"
                 />
               </div>
 

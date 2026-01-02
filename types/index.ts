@@ -19,7 +19,7 @@ export interface Address {
 
 export interface AddressGroup {
   name: string;
-  member: string[];
+  member: { name: string }[] | string[]; // FortiGate API expects {name: string}[], but returns both formats
   comment?: string;
 }
 
