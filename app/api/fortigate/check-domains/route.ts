@@ -48,8 +48,8 @@ export async function POST(request: NextRequest) {
         const policies: PolicyUsage[] = [];
 
         try {
-          // Check if address exists
-          const addressUrl = `https://${server.host}/api/v2/cmdb/firewall/address/${encodeURIComponent(domain)}`;
+          // Get all addresses and find by FQDN value instead of name
+          const addressUrl = `https://${server.host}/api/v2/cmdb/firewall/address`;
 
           const addressResponse = await axios({
             method: 'GET',
@@ -63,10 +63,17 @@ export async function POST(request: NextRequest) {
             params: server.vdom ? { vdom: server.vdom } : undefined,
           });
 
-          registered = addressResponse.status === 200 && addressResponse.data?.results?.length > 0;
+          const addresses = addressResponse.data?.results || [];
+
+          // Find address by FQDN value (not by name)
+          const matchingAddress = addresses.find((addr: any) =>
+            addr.type === 'fqdn' && addr.fqdn === domain
+          );
+
+          registered = !!matchingAddress;
 
           // If registered, check which policies use this address
-          if (registered) {
+          if (registered && matchingAddress) {
             try {
               const policiesUrl = `https://${server.host}/api/v2/cmdb/firewall/policy`;
               const policiesResponse = await axios({
@@ -83,13 +90,13 @@ export async function POST(request: NextRequest) {
 
               const allPolicies = policiesResponse.data?.results || [];
 
-              // Check each policy for this domain
+              // Check each policy for this address (using the actual address name)
               for (const policy of allPolicies) {
                 const srcaddrs = policy.srcaddr || [];
                 const dstaddrs = policy.dstaddr || [];
 
-                const inSrc = srcaddrs.some((addr: any) => addr.name === domain);
-                const inDst = dstaddrs.some((addr: any) => addr.name === domain);
+                const inSrc = srcaddrs.some((addr: any) => addr.name === matchingAddress.name);
+                const inDst = dstaddrs.some((addr: any) => addr.name === matchingAddress.name);
 
                 if (inSrc || inDst) {
                   policies.push({

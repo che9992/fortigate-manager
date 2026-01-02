@@ -323,6 +323,12 @@ export default function DomainAnalyzerPage() {
     const results = [];
 
     try {
+      // Prepare member names list first
+      const memberNames: string[] = Array.from(selectedDomains).map(domain => `FQ_${domain}`);
+
+      console.log('[Group Creation] Creating group:', groupName.trim());
+      console.log('[Group Creation] Members:', memberNames);
+
       // First, ensure all selected domains exist as addresses
       for (const serverId of selectedServers) {
         const server = servers.find(s => s.id === serverId);
@@ -331,12 +337,10 @@ export default function DomainAnalyzerPage() {
         const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
 
         // Create addresses first
-        const memberNames: string[] = [];
         for (const domain of Array.from(selectedDomains)) {
           try {
             // FQDN 타입은 이름 앞에 FQ_ 프리픽스 추가
             const addressName = `FQ_${domain}`;
-            memberNames.push(addressName);
 
             const existing = await client.getAddress(addressName);
             if (!existing) {
@@ -351,10 +355,11 @@ export default function DomainAnalyzerPage() {
                 addressData.comment = groupComment.trim();
               }
 
+              console.log(`[Group Creation] Creating address ${addressName} on ${server.name}`);
               await client.createAddress(addressData);
             }
           } catch (error) {
-            console.error(`Failed to create address ${domain}:`, error);
+            console.error(`Failed to create address ${domain} on ${server.name}:`, error);
           }
         }
 
@@ -380,12 +385,14 @@ export default function DomainAnalyzerPage() {
             groupData.comment = groupComment.trim();
           }
 
+          console.log(`[Group Creation] Creating group on ${server.name}:`, groupData);
           await client.createAddressGroup(groupData);
 
           results.push({ server: server.name, success: true });
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          console.error(`Failed to create group on ${server.name}:`, error);
+          console.error(`[Group Creation] Failed to create group on ${server.name}:`, error);
+          console.error('[Group Creation] Error details:', (error as any)?.fortigateResponse);
           results.push({
             server: server.name,
             success: false,
