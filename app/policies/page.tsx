@@ -6,7 +6,7 @@ import { FortigateClientProxy } from '@/lib/fortigate-client-proxy';
 import { storage } from '@/lib/storage';
 import { ServerSelector } from '@/components/ServerSelector';
 import { MultiSelect } from '@/components/MultiSelect';
-import { Plus, Trash2, Edit2, RefreshCw, Loader2, Shield, CheckCircle, XCircle, Search } from 'lucide-react';
+import { Plus, Trash2, Edit2, RefreshCw, Loader2, Shield, CheckCircle, XCircle, Search, Power, PowerOff, ArrowUpDown } from 'lucide-react';
 import type { Policy } from '@/types';
 
 export default function PoliciesPage() {
@@ -21,6 +21,9 @@ export default function PoliciesPage() {
   const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<number | null>(null);
+  const [movingPolicy, setMovingPolicy] = useState<number | null>(null);
+  const [moveSearchTerm, setMoveSearchTerm] = useState('');
+  const [moveAction, setMoveAction] = useState<'before' | 'after'>('before');
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,6 +47,7 @@ export default function PoliciesPage() {
     schedule: 'always',
     service: [],
     logtraffic: 'all',
+    nat: 'disable',
     status: 'enable',
     comments: '',
   });
@@ -228,6 +232,87 @@ export default function PoliciesPage() {
     }
   };
 
+  const handleToggleStatus = async (policy: Policy) => {
+    if (!policy.policyid) return;
+
+    const newStatus = policy.status === 'enable' ? 'disable' : 'enable';
+    setSyncing(true);
+    const results = [];
+
+    try {
+      for (const serverId of selectedServers) {
+        const server = servers.find(s => s.id === serverId);
+        if (!server) continue;
+
+        try {
+          const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
+          await client.updatePolicy(policy.policyid, { ...policy, status: newStatus });
+          results.push({ server: server.name, success: true });
+        } catch (error) {
+          results.push({
+            server: server.name,
+            success: false,
+            error: (error as Error).message,
+          });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      alert(`${successCount}/${results.length} 서버에서 ${newStatus === 'enable' ? '활성화' : '비활성화'} 완료`);
+      await loadData();
+    } catch (error) {
+      alert('상태 변경 실패: ' + (error as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleMove = async (selectedReference: Policy) => {
+    if (!movingPolicy || !selectedReference.policyid) return;
+
+    setSyncing(true);
+    const results = [];
+    const movingPolicyData = policies.find(p => p.policyid === movingPolicy);
+
+    try {
+      for (const serverId of selectedServers) {
+        const server = servers.find(s => s.id === serverId);
+        if (!server) continue;
+
+        try {
+          const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
+          await client.movePolicy(movingPolicy, moveAction, selectedReference.policyid);
+          results.push({ server: server.name, success: true });
+        } catch (error) {
+          results.push({
+            server: server.name,
+            success: false,
+            error: (error as Error).message,
+          });
+        }
+      }
+
+      await storage.addAuditLog({
+        action: 'update',
+        resourceType: 'policy',
+        resourceName: movingPolicyData?.name || `Policy ${movingPolicy}`,
+        servers: selectedServers.map(id => servers.find(s => s.id === id)?.name || ''),
+        status: results.every(r => r.success) ? 'success' : results.some(r => r.success) ? 'partial' : 'failed',
+        details: `Moved ${moveAction} Policy ${selectedReference.policyid} (${selectedReference.name})`,
+      });
+
+      const successCount = results.filter(r => r.success).length;
+      alert(`${successCount}/${results.length} 서버에서 이동 완료`);
+      setMovingPolicy(null);
+      setMoveSearchTerm('');
+      await loadData();
+    } catch (error) {
+      alert('이동 실패: ' + (error as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
       <div className="lg:col-span-1">
@@ -381,16 +466,30 @@ export default function PoliciesPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.status === 'enable'}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.checked ? 'enable' : 'disable' })}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span className="text-sm text-gray-700">Policy 활성화</span>
-                </label>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.status === 'enable'}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.checked ? 'enable' : 'disable' })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="text-sm text-gray-700">Policy 활성화</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.nat === 'enable'}
+                      onChange={(e) => setFormData({ ...formData, nat: e.target.checked ? 'enable' : 'disable' })}
+                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                    />
+                    <span className="text-sm text-gray-700">NAT 활성화</span>
+                  </label>
+                </div>
               </div>
 
               <div>
@@ -528,6 +627,30 @@ export default function PoliciesPage() {
 
                     <div className="flex items-center space-x-2 ml-4">
                       <button
+                        onClick={() => handleToggleStatus(policy)}
+                        disabled={syncing}
+                        className={`p-2 rounded disabled:opacity-50 ${
+                          policy.status === 'enable'
+                            ? 'text-green-600 hover:bg-green-50'
+                            : 'text-gray-400 hover:bg-gray-100'
+                        }`}
+                        title={policy.status === 'enable' ? '비활성화' : '활성화'}
+                      >
+                        {policy.status === 'enable' ? (
+                          <Power className="h-4 w-4" />
+                        ) : (
+                          <PowerOff className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setMovingPolicy(policy.policyid || null)}
+                        disabled={syncing}
+                        className="p-2 text-purple-600 hover:bg-purple-50 rounded disabled:opacity-50"
+                        title="Policy 이동"
+                      >
+                        <ArrowUpDown className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => {
                           setFormData({
                             ...policy,
@@ -606,6 +729,101 @@ export default function PoliciesPage() {
           )}
         </div>
       </div>
+
+      {/* Policy Move Modal */}
+      {movingPolicy && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+            <h3 className="text-lg font-semibold mb-4">
+              Policy 이동: {policies.find(p => p.policyid === movingPolicy)?.name}
+            </h3>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                이동 방향
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setMoveAction('before')}
+                  className={`px-4 py-2 rounded ${
+                    moveAction === 'before'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  선택한 Policy 앞으로
+                </button>
+                <button
+                  onClick={() => setMoveAction('after')}
+                  className={`px-4 py-2 rounded ${
+                    moveAction === 'after'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  선택한 Policy 뒤로
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                기준 Policy 검색
+              </label>
+              <input
+                type="text"
+                value={moveSearchTerm}
+                onChange={(e) => setMoveSearchTerm(e.target.value)}
+                placeholder="Policy 이름으로 검색..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              />
+            </div>
+
+            <div className="max-h-96 overflow-y-auto border border-gray-200 rounded">
+              {policies
+                .filter(p =>
+                  p.policyid !== movingPolicy &&
+                  p.name.toLowerCase().includes(moveSearchTerm.toLowerCase())
+                )
+                .map((policy) => (
+                  <div
+                    key={policy.policyid}
+                    onClick={() => handleMove(policy)}
+                    className="p-3 hover:bg-gray-100 cursor-pointer border-b border-gray-100"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">#{policy.policyid} - {policy.name}</p>
+                        <p className="text-xs text-gray-600">
+                          {policy.srcintf.join(', ')} → {policy.dstintf.join(', ')}
+                        </p>
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        policy.status === 'enable'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {policy.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => {
+                  setMovingPolicy(null);
+                  setMoveSearchTerm('');
+                }}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

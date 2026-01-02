@@ -40,6 +40,8 @@ export default function DomainAnalyzerPage() {
   const [adding, setAdding] = useState(false);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [domainComment, setDomainComment] = useState('');
+  const [groupComment, setGroupComment] = useState('');
   const [registrationStatus, setRegistrationStatus] = useState<DomainRegistrationStatus>({});
   const [checkingStatus, setCheckingStatus] = useState(false);
 
@@ -211,8 +213,11 @@ export default function DomainAnalyzerPage() {
 
         for (const domain of Array.from(selectedDomains)) {
           try {
+            // FQDN 타입은 이름 앞에 FQ_ 프리픽스 추가
+            const addressName = `FQ_${domain}`;
+
             // Check if address already exists
-            const existing = await client.getAddress(domain);
+            const existing = await client.getAddress(addressName);
             if (existing) {
               results.push({
                 server: server.name,
@@ -224,12 +229,18 @@ export default function DomainAnalyzerPage() {
             }
 
             // Create new FQDN address
-            await client.createAddress({
-              name: domain,
+            const addressData: any = {
+              name: addressName,
               type: 'fqdn',
               fqdn: domain,
-              comment: `Auto-added from domain analyzer for ${inputDomain}`,
-            });
+            };
+
+            // 사용자가 입력한 comment가 있으면 추가
+            if (domainComment.trim()) {
+              addressData.comment = domainComment.trim();
+            }
+
+            await client.createAddress(addressData);
 
             results.push({ server: server.name, domain, success: true });
           } catch (error) {
@@ -308,16 +319,27 @@ export default function DomainAnalyzerPage() {
         const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
 
         // Create addresses first
+        const memberNames: string[] = [];
         for (const domain of Array.from(selectedDomains)) {
           try {
-            const existing = await client.getAddress(domain);
+            // FQDN 타입은 이름 앞에 FQ_ 프리픽스 추가
+            const addressName = `FQ_${domain}`;
+            memberNames.push(addressName);
+
+            const existing = await client.getAddress(addressName);
             if (!existing) {
-              await client.createAddress({
-                name: domain,
+              const addressData: any = {
+                name: addressName,
                 type: 'fqdn',
                 fqdn: domain,
-                comment: `Auto-added for group ${groupName.trim()} from ${inputDomain}`,
-              });
+              };
+
+              // 사용자가 입력한 comment가 있으면 추가
+              if (groupComment.trim()) {
+                addressData.comment = groupComment.trim();
+              }
+
+              await client.createAddress(addressData);
             }
           } catch (error) {
             console.error(`Failed to create address ${domain}:`, error);
@@ -336,11 +358,17 @@ export default function DomainAnalyzerPage() {
             continue;
           }
 
-          await client.createAddressGroup({
+          const groupData: any = {
             name: groupName.trim(),
-            member: Array.from(selectedDomains),
-            comment: `Auto-created from domain analyzer for ${inputDomain}`,
-          });
+            member: memberNames,
+          };
+
+          // 사용자가 입력한 comment가 있으면 추가
+          if (groupComment.trim()) {
+            groupData.comment = groupComment.trim();
+          }
+
+          await client.createAddressGroup(groupData);
 
           results.push({ server: server.name, success: true });
         } catch (error) {
@@ -565,33 +593,42 @@ export default function DomainAnalyzerPage() {
                   📤 = Source Address | 📥 = Destination Address | 🔄 = Both
                 </p>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => checkRegistrationStatus(domains.map(d => d.domain))}
-                  disabled={checkingStatus || servers.length === 0}
-                  className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
-                  title="등록 상태 새로고침"
-                >
-                  <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
-                  <span>상태 확인</span>
-                </button>
-                <button
-                  onClick={addToFortigate}
-                  disabled={adding || selectedDomains.size === 0 || selectedServers.length === 0}
-                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                >
-                  {adding ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>추가 중...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4" />
-                      <span>Address 추가</span>
-                    </>
-                  )}
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={domainComment}
+                    onChange={(e) => setDomainComment(e.target.value)}
+                    placeholder="Comment (선택사항)"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  />
+                  <button
+                    onClick={() => checkRegistrationStatus(domains.map(d => d.domain))}
+                    disabled={checkingStatus || servers.length === 0}
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50"
+                    title="등록 상태 새로고침"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${checkingStatus ? 'animate-spin' : ''}`} />
+                    <span>상태 확인</span>
+                  </button>
+                  <button
+                    onClick={addToFortigate}
+                    disabled={adding || selectedDomains.size === 0 || selectedServers.length === 0}
+                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {adding ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>추가 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" />
+                        <span>Address 추가</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -599,32 +636,40 @@ export default function DomainAnalyzerPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 선택한 도메인들을 그룹으로 생성
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    placeholder="그룹 이름 입력 (예: megastudy_domains)"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  />
+                  <button
+                    onClick={createAddressGroup}
+                    disabled={creatingGroup || !groupName.trim() || selectedDomains.size === 0 || selectedServers.length === 0}
+                    className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {creatingGroup ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>생성 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Users className="h-4 w-4" />
+                        <span>그룹 생성</span>
+                      </>
+                    )}
+                  </button>
+                </div>
                 <input
                   type="text"
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && createAddressGroup()}
-                  placeholder="그룹 이름 입력 (예: megastudy_domains)"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                  value={groupComment}
+                  onChange={(e) => setGroupComment(e.target.value)}
+                  placeholder="Comment (선택사항)"
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm"
                 />
-                <button
-                  onClick={createAddressGroup}
-                  disabled={creatingGroup || !groupName.trim() || selectedDomains.size === 0 || selectedServers.length === 0}
-                  className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
-                >
-                  {creatingGroup ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>생성 중...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Users className="h-4 w-4" />
-                      <span>그룹 생성</span>
-                    </>
-                  )}
-                </button>
               </div>
               <p className="text-xs text-gray-600 mt-2">
                 선택된 {selectedDomains.size}개 도메인이 자동으로 Address로 추가되고, 하나의 그룹으로 묶입니다

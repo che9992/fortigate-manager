@@ -133,6 +133,10 @@ export class FortigateClientProxy {
     await this.proxyRequest('DELETE', `/cmdb/firewall/policy/${policyid}?vdom=${this.vdom}`);
   }
 
+  async movePolicy(policyid: number, action: 'before' | 'after', reference: number): Promise<void> {
+    await this.proxyRequest('PUT', `/cmdb/firewall/policy/${policyid}?vdom=${this.vdom}&action=move&${action}=${reference}`);
+  }
+
   // Service Management
   async getServices(): Promise<ServiceObject[]> {
     const data = await this.proxyRequest('GET', `/cmdb/firewall.service/custom?vdom=${this.vdom}`);
