@@ -79,6 +79,35 @@ export const storage = {
     }
   },
 
+  // Blacklist Management
+  async getBlacklist(): Promise<string[]> {
+    if (typeof window === 'undefined') return [];
+    try {
+      const response = await fetch('/api/blacklist');
+      if (!response.ok) throw new Error('Failed to fetch blacklist');
+      const data = await response.json();
+      return data.blacklist || [];
+    } catch (error) {
+      console.error('Failed to get blacklist:', error);
+      return [];
+    }
+  },
+
+  async saveBlacklist(blacklist: string[]): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      const response = await fetch('/api/blacklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blacklist }),
+      });
+      if (!response.ok) throw new Error('Failed to save blacklist');
+    } catch (error) {
+      console.error('Failed to save blacklist:', error);
+      throw error;
+    }
+  },
+
   async addAuditLog(log: Omit<AuditLog, 'id' | 'timestamp'>): Promise<void> {
     if (typeof window === 'undefined') return;
 

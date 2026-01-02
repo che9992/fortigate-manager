@@ -32,7 +32,7 @@ interface DomainRegistrationStatus {
 export default function DomainAnalyzerPage() {
   const { servers, selectedServers, loadServers } = useStore();
   const [inputDomain, setInputDomain] = useState('');
-  const [blocklist, setBlocklist] = useState<string[]>(['facebook', 'twitter', 'instagram', 'tiktok', 'snapchat']);
+  const [blocklist, setBlocklist] = useState<string[]>([]);
   const [newBlockItem, setNewBlockItem] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [domains, setDomains] = useState<DomainInfo[]>([]);
@@ -43,21 +43,46 @@ export default function DomainAnalyzerPage() {
   const [registrationStatus, setRegistrationStatus] = useState<DomainRegistrationStatus>({});
   const [checkingStatus, setCheckingStatus] = useState(false);
 
-  // Load servers on mount
+  // Load servers and blacklist on mount
   useEffect(() => {
     loadServers();
+    loadBlacklist();
   }, [loadServers]);
+
+  const loadBlacklist = async () => {
+    try {
+      const blacklistData = await storage.getBlacklist();
+      setBlocklist(blacklistData);
+    } catch (error) {
+      console.error('Failed to load blacklist:', error);
+      // Use default if load fails
+      setBlocklist(['facebook', 'twitter', 'instagram', 'tiktok', 'snapchat']);
+    }
+  };
+
+  const saveBlacklistToBackend = async (newBlocklist: string[]) => {
+    try {
+      await storage.saveBlacklist(newBlocklist);
+    } catch (error) {
+      console.error('Failed to save blacklist:', error);
+    }
+  };
 
   const addToBlocklist = () => {
     if (!newBlockItem.trim()) return;
-    if (!blocklist.includes(newBlockItem.trim().toLowerCase())) {
-      setBlocklist([...blocklist, newBlockItem.trim().toLowerCase()]);
+    const newItem = newBlockItem.trim().toLowerCase();
+    if (!blocklist.includes(newItem)) {
+      const newBlocklist = [...blocklist, newItem];
+      setBlocklist(newBlocklist);
+      saveBlacklistToBackend(newBlocklist);
     }
     setNewBlockItem('');
   };
 
   const removeFromBlocklist = (item: string) => {
-    setBlocklist(blocklist.filter(b => b !== item));
+    const newBlocklist = blocklist.filter(b => b !== item);
+    setBlocklist(newBlocklist);
+    saveBlacklistToBackend(newBlocklist);
   };
 
   const isBlocked = (domain: string): boolean => {
@@ -208,11 +233,13 @@ export default function DomainAnalyzerPage() {
 
             results.push({ server: server.name, domain, success: true });
           } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`Failed to add ${domain} to ${server.name}:`, error);
             results.push({
               server: server.name,
               domain,
               success: false,
-              error: (error as Error).message,
+              error: errorMessage,
             });
           }
         }
@@ -229,10 +256,14 @@ export default function DomainAnalyzerPage() {
 
       const successCount = results.filter(r => r.success).length;
       const failCount = results.filter(r => !r.success).length;
+      const failedResults = results.filter(r => !r.success);
 
       let message = `${successCount}개 도메인이 성공적으로 추가되었습니다`;
       if (failCount > 0) {
-        message += `\n${failCount}개 실패 (이미 존재하거나 오류 발생)`;
+        message += `\n\n${failCount}개 실패:`;
+        failedResults.forEach(r => {
+          message += `\n- ${r.domain} (${r.server}): ${r.error}`;
+        });
       }
       alert(message);
 
@@ -313,10 +344,12 @@ export default function DomainAnalyzerPage() {
 
           results.push({ server: server.name, success: true });
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`Failed to create group on ${server.name}:`, error);
           results.push({
             server: server.name,
             success: false,
-            error: (error as Error).message,
+            error: errorMessage,
           });
         }
       }
@@ -332,10 +365,14 @@ export default function DomainAnalyzerPage() {
 
       const successCount = results.filter(r => r.success).length;
       const failCount = results.filter(r => !r.success).length;
+      const failedResults = results.filter(r => !r.success);
 
       let message = `${successCount}개 서버에 그룹 "${groupName.trim()}" 생성 완료`;
       if (failCount > 0) {
-        message += `\n${failCount}개 서버 실패`;
+        message += `\n\n${failCount}개 서버 실패:`;
+        failedResults.forEach(r => {
+          message += `\n- ${r.server}: ${r.error}`;
+        });
       }
       alert(message);
 
