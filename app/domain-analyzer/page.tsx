@@ -12,10 +12,17 @@ interface DomainInfo {
   description?: string;
 }
 
+interface PolicyUsage {
+  policyId: number;
+  policyName: string;
+  usedIn: 'srcaddr' | 'dstaddr' | 'both';
+}
+
 interface ServerRegistration {
   serverId: string;
   serverName: string;
   registered: boolean;
+  policies: PolicyUsage[];
 }
 
 interface DomainRegistrationStatus {
@@ -23,7 +30,7 @@ interface DomainRegistrationStatus {
 }
 
 export default function DomainAnalyzerPage() {
-  const { servers, selectedServers } = useStore();
+  const { servers, selectedServers, loadServers } = useStore();
   const [inputDomain, setInputDomain] = useState('');
   const [blocklist, setBlocklist] = useState<string[]>(['facebook', 'twitter', 'instagram', 'tiktok', 'snapchat']);
   const [newBlockItem, setNewBlockItem] = useState('');
@@ -35,6 +42,11 @@ export default function DomainAnalyzerPage() {
   const [groupName, setGroupName] = useState('');
   const [registrationStatus, setRegistrationStatus] = useState<DomainRegistrationStatus>({});
   const [checkingStatus, setCheckingStatus] = useState(false);
+
+  // Load servers on mount
+  useEffect(() => {
+    loadServers();
+  }, [loadServers]);
 
   const addToBlocklist = () => {
     if (!newBlockItem.trim()) return;
@@ -372,6 +384,51 @@ export default function DomainAnalyzerPage() {
         </p>
       </div>
 
+      {/* Server selection */}
+      {servers.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">대상 서버 선택</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            도메인을 추가할 FortiGate 서버를 선택하세요. (선택된 {selectedServers.length}개 / 전체 {servers.length}개)
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {servers.map((server) => {
+              const isSelected = selectedServers.includes(server.id);
+              return (
+                <button
+                  key={server.id}
+                  onClick={() => useStore.getState().toggleServerSelection(server.id)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-md border-2 transition-all ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50 text-blue-900'
+                      : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                  }`}
+                >
+                  <Server className="h-4 w-4" />
+                  <span className="font-medium">{server.name}</span>
+                  {isSelected && <CheckCircle className="h-4 w-4 text-blue-600" />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => useStore.getState().selectAllServers()}
+              className="text-sm text-blue-600 hover:text-blue-700"
+            >
+              전체 선택
+            </button>
+            <span className="text-gray-300">|</span>
+            <button
+              onClick={() => useStore.getState().clearServerSelection()}
+              className="text-sm text-blue-600 hover:text-blue-700"
+            >
+              선택 해제
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="space-y-4">
           <div>
@@ -466,6 +523,9 @@ export default function DomainAnalyzerPage() {
                 <p className="text-sm text-gray-600 mt-1">
                   {selectedDomains.size}개 선택됨
                   {checkingStatus && <span className="ml-2 text-blue-600">등록 상태 확인 중...</span>}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  📤 = Source Address | 📥 = Destination Address | 🔄 = Both
                 </p>
               </div>
               <div className="flex gap-2">
@@ -578,22 +638,41 @@ export default function DomainAnalyzerPage() {
                     {/* Server registration status */}
                     <div className="flex items-center space-x-2 ml-4">
                       {status ? (
-                        <div className="flex flex-wrap gap-1">
-                          {status.map((s) => (
-                            <span
-                              key={s.serverId}
-                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                s.registered
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-gray-100 text-gray-500'
-                              }`}
-                              title={s.registered ? `${s.serverName}에 등록됨` : `${s.serverName}에 미등록`}
-                            >
-                              <Server className="h-3 w-3 mr-1" />
-                              {s.serverName}
-                              {s.registered && <CheckCircle className="h-3 w-3 ml-1" />}
-                            </span>
-                          ))}
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-wrap gap-1">
+                            {status.map((s) => (
+                              <div key={s.serverId} className="flex flex-col gap-1">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                    s.registered
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-500'
+                                  }`}
+                                  title={s.registered ? `${s.serverName}에 등록됨` : `${s.serverName}에 미등록`}
+                                >
+                                  <Server className="h-3 w-3 mr-1" />
+                                  {s.serverName}
+                                  {s.registered && <CheckCircle className="h-3 w-3 ml-1" />}
+                                </span>
+                                {s.registered && s.policies.length > 0 && (
+                                  <div className="ml-4 flex flex-wrap gap-1">
+                                    {s.policies.map((policy) => (
+                                      <span
+                                        key={policy.policyId}
+                                        className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800"
+                                        title={`Policy ${policy.policyId}: ${policy.policyName} (${policy.usedIn})`}
+                                      >
+                                        P{policy.policyId}
+                                        {policy.usedIn === 'srcaddr' && ' 📤'}
+                                        {policy.usedIn === 'dstaddr' && ' 📥'}
+                                        {policy.usedIn === 'both' && ' 🔄'}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : checkingStatus ? (
                         <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
@@ -607,11 +686,22 @@ export default function DomainAnalyzerPage() {
         </div>
       )}
 
-      {selectedServers.length === 0 && domains.length > 0 && (
+      {selectedServers.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <p className="text-sm text-yellow-800">
-            ⚠️ FortiGate 서버를 선택해야 도메인을 추가할 수 있습니다.
-          </p>
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0 text-yellow-600 text-2xl">⚠️</div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-yellow-900 mb-1">
+                서버 선택 필요
+              </h3>
+              <p className="text-sm text-yellow-800 mb-2">
+                도메인을 추가하려면 FortiGate 서버를 먼저 선택해야 합니다.
+              </p>
+              <p className="text-xs text-yellow-700">
+                💡 상단 네비게이션의 "서버 관리" 페이지에서 서버를 추가하고 활성화(enabled)하면 자동으로 선택됩니다.
+              </p>
+            </div>
+          </div>
         </div>
       )}
     </div>

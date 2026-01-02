@@ -2,12 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import axios from 'axios';
 import https from 'https';
 
+interface PolicyUsage {
+  policyId: number;
+  policyName: string;
+  usedIn: 'srcaddr' | 'dstaddr' | 'both';
+}
+
 interface DomainCheckResult {
   domain: string;
   servers: {
     serverId: string;
     serverName: string;
     registered: boolean;
+    policies: PolicyUsage[];
   }[];
 }
 
@@ -37,12 +44,16 @@ export async function POST(request: NextRequest) {
       };
 
       for (const server of servers) {
-        try {
-          const url = `https://${server.host}/api/v2/cmdb/firewall/address/${encodeURIComponent(domain)}`;
+        let registered = false;
+        const policies: PolicyUsage[] = [];
 
-          const response = await axios({
+        try {
+          // Check if address exists
+          const addressUrl = `https://${server.host}/api/v2/cmdb/firewall/address/${encodeURIComponent(domain)}`;
+
+          const addressResponse = await axios({
             method: 'GET',
-            url,
+            url: addressUrl,
             headers: {
               'Authorization': `Bearer ${server.apiKey}`,
               'Content-Type': 'application/json',
@@ -52,11 +63,52 @@ export async function POST(request: NextRequest) {
             params: server.vdom ? { vdom: server.vdom } : undefined,
           });
 
-          // If we get a successful response, the address exists
+          registered = addressResponse.status === 200 && addressResponse.data?.results?.length > 0;
+
+          // If registered, check which policies use this address
+          if (registered) {
+            try {
+              const policiesUrl = `https://${server.host}/api/v2/cmdb/firewall/policy`;
+              const policiesResponse = await axios({
+                method: 'GET',
+                url: policiesUrl,
+                headers: {
+                  'Authorization': `Bearer ${server.apiKey}`,
+                  'Content-Type': 'application/json',
+                },
+                httpsAgent,
+                timeout: 15000,
+                params: server.vdom ? { vdom: server.vdom } : undefined,
+              });
+
+              const allPolicies = policiesResponse.data?.results || [];
+
+              // Check each policy for this domain
+              for (const policy of allPolicies) {
+                const srcaddrs = policy.srcaddr || [];
+                const dstaddrs = policy.dstaddr || [];
+
+                const inSrc = srcaddrs.some((addr: any) => addr.name === domain);
+                const inDst = dstaddrs.some((addr: any) => addr.name === domain);
+
+                if (inSrc || inDst) {
+                  policies.push({
+                    policyId: policy.policyid,
+                    policyName: policy.name || `Policy ${policy.policyid}`,
+                    usedIn: inSrc && inDst ? 'both' : inSrc ? 'srcaddr' : 'dstaddr',
+                  });
+                }
+              }
+            } catch (policyError) {
+              console.error(`Failed to check policies for ${domain} on ${server.name}:`, policyError);
+            }
+          }
+
           domainResult.servers.push({
             serverId: server.id,
             serverName: server.name,
-            registered: response.status === 200 && response.data?.results?.length > 0,
+            registered,
+            policies,
           });
         } catch (error: any) {
           // 404 means not found, other errors we'll treat as not registered
@@ -64,6 +116,7 @@ export async function POST(request: NextRequest) {
             serverId: server.id,
             serverName: server.name,
             registered: false,
+            policies: [],
           });
         }
       }
