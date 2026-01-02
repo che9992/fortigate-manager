@@ -93,6 +93,12 @@ export default function DomainAnalyzerPage() {
       const newBlocklist = [...blocklist, item];
       setBlocklist(newBlocklist);
       saveBlacklistToBackend(newBlocklist);
+
+      // 블랙리스트에 추가된 도메인은 선택 해제
+      const newSelected = new Set(selectedDomains);
+      newSelected.delete(domain);
+      setSelectedDomains(newSelected);
+
       alert(`"${domain}"를 블랙리스트에 추가했습니다`);
     } else {
       alert(`"${domain}"는 이미 블랙리스트에 있습니다`);
@@ -377,7 +383,7 @@ export default function DomainAnalyzerPage() {
 
           const groupData: any = {
             name: groupName.trim(),
-            member: memberNames,
+            member: memberNames.map(name => ({ name })), // FortiGate expects objects with 'name' property
           };
 
           // 사용자가 입력한 comment가 있으면 추가

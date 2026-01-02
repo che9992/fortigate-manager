@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Zap, Plus, Minus, Users as UsersIcon, Shield, Loader2 } from 'lucide-react';
+import { Zap, Plus, Minus, Users as UsersIcon, Shield, Loader2, Search, Eye } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { ServerSelector } from '@/components/ServerSelector';
 import { FortigateClientProxy } from '@/lib/fortigate-client-proxy';
@@ -13,6 +13,11 @@ interface ActionResult {
   message: string;
 }
 
+interface GroupMemberInfo {
+  serverName: string;
+  members: string[];
+}
+
 export default function QuickActionsPage() {
   const { servers, selectedServers } = useStore();
   const [executing, setExecuting] = useState(false);
@@ -22,6 +27,8 @@ export default function QuickActionsPage() {
   const [groupName, setGroupName] = useState('');
   const [memberToAdd, setMemberToAdd] = useState('');
   const [memberToRemove, setMemberToRemove] = useState('');
+  const [groupMembers, setGroupMembers] = useState<GroupMemberInfo[]>([]);
+  const [viewingMembers, setViewingMembers] = useState(false);
 
   const addMemberToGroup = async () => {
     if (!groupName.trim() || !memberToAdd.trim() || selectedServers.length === 0) {
@@ -68,10 +75,10 @@ export default function QuickActionsPage() {
             continue;
           }
 
-          // Add new member
+          // Add new member (FortiGate expects objects with 'name' property)
           await client.updateAddressGroup(groupName.trim(), {
             ...existingGroup,
-            member: [...members, memberToAdd.trim()],
+            member: [...members, memberToAdd.trim()].map(name => ({ name })),
           });
 
           newResults.push({
@@ -160,7 +167,7 @@ export default function QuickActionsPage() {
 
           await client.updateAddressGroup(groupName.trim(), {
             ...existingGroup,
-            member: updatedMembers,
+            member: updatedMembers.map(name => ({ name })), // FortiGate expects objects
           });
 
           newResults.push({
@@ -191,6 +198,56 @@ export default function QuickActionsPage() {
 
   const clearResults = () => {
     setResults([]);
+  };
+
+  const viewGroupMembers = async () => {
+    if (!groupName.trim() || selectedServers.length === 0) {
+      alert('그룹 이름을 입력하고 서버를 선택해주세요');
+      return;
+    }
+
+    setExecuting(true);
+    setViewingMembers(true);
+    const membersInfo: GroupMemberInfo[] = [];
+
+    try {
+      for (const serverId of selectedServers) {
+        const server = servers.find(s => s.id === serverId);
+        if (!server) continue;
+
+        try {
+          const client = new FortigateClientProxy(server.host, server.apiKey, server.vdom);
+          const group = await client.getAddressGroup(groupName.trim());
+
+          if (group) {
+            const members = Array.isArray(group.member)
+              ? group.member.map((m: any) => typeof m === 'object' ? m.name : m)
+              : [];
+
+            membersInfo.push({
+              serverName: server.name,
+              members: members,
+            });
+          } else {
+            membersInfo.push({
+              serverName: server.name,
+              members: [],
+            });
+          }
+        } catch (error) {
+          membersInfo.push({
+            serverName: server.name,
+            members: [],
+          });
+        }
+      }
+
+      setGroupMembers(membersInfo);
+    } catch (error) {
+      alert('그룹 조회 실패: ' + (error as Error).message);
+    } finally {
+      setExecuting(false);
+    }
   };
 
   return (
@@ -229,14 +286,61 @@ export default function QuickActionsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Address Group 이름
             </label>
-            <input
-              type="text"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              placeholder="예: Keymedia.co.kr"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder="예: Keymedia.co.kr"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+              />
+              <button
+                onClick={viewGroupMembers}
+                disabled={executing || !groupName.trim() || selectedServers.length === 0}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {executing && viewingMembers ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+                <span>멤버 조회</span>
+              </button>
+            </div>
           </div>
+
+          {/* Group Members Display */}
+          {groupMembers.length > 0 && (
+            <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+              <h3 className="font-medium text-gray-900 mb-3">현재 그룹 멤버</h3>
+              <div className="space-y-3">
+                {groupMembers.map((info) => (
+                  <div key={info.serverName} className="bg-white rounded p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-sm text-gray-900">{info.serverName}</span>
+                      <span className="text-xs text-gray-500">
+                        {info.members.length === 0 ? '그룹 없음' : `${info.members.length}개 멤버`}
+                      </span>
+                    </div>
+                    {info.members.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {info.members.map((member) => (
+                          <span
+                            key={member}
+                            className="inline-block px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs"
+                          >
+                            {member}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">이 서버에 그룹이 존재하지 않습니다</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Add Member */}
