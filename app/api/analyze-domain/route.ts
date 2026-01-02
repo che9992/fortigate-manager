@@ -32,22 +32,26 @@ export async function POST(request: NextRequest) {
     }
 
     if (!domain) {
-      return NextResponse.json({ error: 'Domain is required' }, { status: 400 });
+      return NextResponse.json({
+        success: false,
+        error: 'Domain is required'
+      }, { status: 400 });
     }
 
     // Normalize domain
     const normalizedDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const url = `https://${normalizedDomain}`;
 
-    console.log(`[Domain Analyzer] Analyzing: ${url}`);
+    console.log(`[Domain Analyzer] Starting analysis for: ${normalizedDomain}`);
 
     const domains = new Set<string>();
     const domainInfo: { [key: string]: DomainInfo } = {};
 
     // Get executable path from remote URL
+    console.log('[Domain Analyzer] Loading Chromium...');
     const executablePath = await chromium.executablePath(CHROMIUM_URL);
 
     // Launch headless browser with serverless-compatible settings
+    console.log('[Domain Analyzer] Launching browser...');
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: { width: 1280, height: 720 },
@@ -103,11 +107,30 @@ export async function POST(request: NextRequest) {
       req.continue();
     });
 
-    // Navigate to the page
-    await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 30000,
-    });
+    // Try HTTPS first, fallback to HTTP
+    let success = false;
+    const urls = [`https://${normalizedDomain}`, `http://${normalizedDomain}`];
+
+    for (const url of urls) {
+      try {
+        console.log(`[Domain Analyzer] Navigating to: ${url}`);
+        await page.goto(url, {
+          waitUntil: 'networkidle2',
+          timeout: 30000,
+        });
+        success = true;
+        break;
+      } catch (error: any) {
+        console.error(`[Domain Analyzer] Failed to load ${url}:`, error.message);
+        if (url === urls[urls.length - 1]) {
+          throw error; // Throw on last attempt
+        }
+      }
+    }
+
+    if (!success) {
+      throw new Error('Failed to load the domain');
+    }
 
     // Wait a bit more to catch lazy-loaded resources using delay helper
     await delay(2000);
@@ -132,7 +155,7 @@ export async function POST(request: NextRequest) {
       count: sortedDomains.length,
     });
   } catch (error: any) {
-    console.error('[Domain Analyzer] Error:', error.message);
+    console.error('[Domain Analyzer] Error:', error.message, error.stack);
 
     // Clean up browser if still open
     if (browser) {

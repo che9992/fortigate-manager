@@ -108,6 +108,10 @@ export default function DomainAnalyzerPage() {
         body: JSON.stringify({ domain: inputDomain.trim() }),
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const result = await response.json();
 
       if (!result.success) {

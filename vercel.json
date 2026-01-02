@@ -3,5 +3,11 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "functions": {
+    "app/api/analyze-domain/route.ts": {
+      "memory": 3008,
+      "maxDuration": 60
+    }
+  }
 }
