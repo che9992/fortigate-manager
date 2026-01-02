@@ -44,13 +44,36 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('[FortiGate Proxy] Error:', error.message);
+    console.error('[FortiGate Proxy] Error details:', error.response?.data);
 
     if (axios.isAxiosError(error)) {
+      const fortigateError = error.response?.data;
+      const status = error.response?.status || 500;
+
+      // Check for specific FortiGate errors
+      let errorMessage = error.message;
+
+      // Handle duplicate entry errors
+      if (fortigateError?.error_description?.includes('already exist') ||
+          fortigateError?.error_description?.includes('duplicate') ||
+          status === 424) {
+        errorMessage = '이미 존재하는 항목입니다';
+      }
+      // Handle invalid reference errors
+      else if (fortigateError?.error_description?.includes('referenced') ||
+               fortigateError?.error_description?.includes('invalid')) {
+        errorMessage = fortigateError.error_description || '잘못된 참조입니다';
+      }
+      // Use FortiGate's error description if available
+      else if (fortigateError?.error_description) {
+        errorMessage = fortigateError.error_description;
+      }
+
       return NextResponse.json({
         success: false,
-        error: error.message,
-        status: error.response?.status || 500,
-        data: error.response?.data,
+        error: errorMessage,
+        status: status,
+        fortigateResponse: fortigateError,
         details: {
           message: error.message,
           code: error.code,
@@ -59,7 +82,7 @@ export async function POST(request: NextRequest) {
             method: error.config?.method,
           }
         }
-      }, { status: error.response?.status || 500 });
+      }, { status: status });
     }
 
     return NextResponse.json({

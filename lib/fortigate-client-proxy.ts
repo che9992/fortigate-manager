@@ -12,28 +12,39 @@ export class FortigateClientProxy {
   }
 
   private async proxyRequest(method: string, endpoint: string, data?: any) {
-    const response = await fetch('/api/fortigate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        host: this.host,
-        apiKey: this.apiKey,
-        vdom: this.vdom,
-        method,
-        endpoint,
-        data,
-      }),
-    });
+    try {
+      const response = await fetch('/api/fortigate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          host: this.host,
+          apiKey: this.apiKey,
+          vdom: this.vdom,
+          method,
+          endpoint,
+          data,
+        }),
+      });
 
-    const result = await response.json();
+      const result = await response.json();
 
-    if (!result.success) {
-      throw new Error(result.error || 'FortiGate API request failed');
+      if (!result.success) {
+        const error = new Error(result.error || 'FortiGate API request failed');
+        (error as any).status = result.status;
+        (error as any).fortigateResponse = result.fortigateResponse;
+        throw error;
+      }
+
+      return result.data;
+    } catch (error: any) {
+      // If it's a network error (fetch failed), throw with more context
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('네트워크 오류: 프록시 서버에 연결할 수 없습니다');
+      }
+      throw error;
     }
-
-    return result.data;
   }
 
   // System Status
