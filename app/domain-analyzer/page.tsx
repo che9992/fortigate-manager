@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Globe, Search, Loader2, Plus, CheckCircle, Users, X, Server, RefreshCw } from 'lucide-react';
+import { Globe, Search, Loader2, Plus, CheckCircle, Users, X, Server, RefreshCw, Ban } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { FortigateClientProxy } from '@/lib/fortigate-client-proxy';
 import { storage } from '@/lib/storage';
@@ -85,6 +85,18 @@ export default function DomainAnalyzerPage() {
     const newBlocklist = blocklist.filter(b => b !== item);
     setBlocklist(newBlocklist);
     saveBlacklistToBackend(newBlocklist);
+  };
+
+  const addDomainToBlocklist = (domain: string) => {
+    const item = domain.toLowerCase();
+    if (!blocklist.includes(item)) {
+      const newBlocklist = [...blocklist, item];
+      setBlocklist(newBlocklist);
+      saveBlacklistToBackend(newBlocklist);
+      alert(`"${domain}"를 블랙리스트에 추가했습니다`);
+    } else {
+      alert(`"${domain}"는 이미 블랙리스트에 있습니다`);
+    }
   };
 
   const isBlocked = (domain: string): boolean => {
@@ -709,6 +721,16 @@ export default function DomainAnalyzerPage() {
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${getTypeColor(domainInfo.type)}`}>
                             {getTypeLabel(domainInfo.type)}
                           </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addDomainToBlocklist(domainInfo.domain);
+                            }}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            title="블랙리스트에 추가"
+                          >
+                            <Ban className="h-4 w-4" />
+                          </button>
                         </div>
                         {domainInfo.description && (
                           <p className="text-sm text-gray-600 mt-1">
