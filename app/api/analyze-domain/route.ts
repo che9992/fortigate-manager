@@ -11,8 +11,11 @@ interface DomainInfo {
 // Helper to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Check if running locally or on Vercel
+const isLocal = process.env.NODE_ENV !== 'production' || !process.env.VERCEL;
+
 // Remote chromium URL for Vercel serverless
-const CHROMIUM_URL = 'https://github.com/nicholasjackson/chromium-binaries/releases/download/v131.0.6778.204/chromium-v131.0.6778.204-pack.tar';
+const CHROMIUM_URL = 'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar';
 
 export async function POST(request: NextRequest) {
   let browser = null;
@@ -48,16 +51,35 @@ export async function POST(request: NextRequest) {
 
     // Get executable path from remote URL
     console.log('[Domain Analyzer] Loading Chromium...');
-    const executablePath = await chromium.executablePath(CHROMIUM_URL);
+    console.log('[Domain Analyzer] Environment:', { isLocal, NODE_ENV: process.env.NODE_ENV, VERCEL: process.env.VERCEL });
+
+    let executablePath: string;
+    try {
+      executablePath = await chromium.executablePath(CHROMIUM_URL);
+      console.log('[Domain Analyzer] Chromium path:', executablePath);
+    } catch (error: any) {
+      console.error('[Domain Analyzer] Failed to get Chromium path:', error.message);
+      throw new Error(`Chromium setup failed: ${error.message}`);
+    }
 
     // Launch headless browser with serverless-compatible settings
     console.log('[Domain Analyzer] Launching browser...');
-    browser = await puppeteer.launch({
+    const launchOptions = {
       args: chromium.args,
-      defaultViewport: { width: 1280, height: 720 },
+      defaultViewport: { width: 1920, height: 1080 },
       executablePath,
       headless: true,
-    });
+    };
+
+    console.log('[Domain Analyzer] Launch args count:', chromium.args.length);
+
+    try {
+      browser = await puppeteer.launch(launchOptions);
+      console.log('[Domain Analyzer] Browser launched successfully');
+    } catch (error: any) {
+      console.error('[Domain Analyzer] Failed to launch browser:', error.message);
+      throw new Error(`Browser launch failed: ${error.message}`);
+    }
 
     const page = await browser.newPage();
 
@@ -115,25 +137,28 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`[Domain Analyzer] Navigating to: ${url}`);
         await page.goto(url, {
-          waitUntil: 'networkidle2',
-          timeout: 30000,
+          waitUntil: 'domcontentloaded', // Changed from networkidle2 for faster loading
+          timeout: 45000, // Increased timeout
         });
+        console.log(`[Domain Analyzer] Successfully loaded ${url}`);
         success = true;
+
+        // Wait a bit for dynamic content and network requests
+        console.log('[Domain Analyzer] Waiting for additional resources...');
+        await delay(3000); // Increased wait time for lazy-loaded resources
+
         break;
       } catch (error: any) {
         console.error(`[Domain Analyzer] Failed to load ${url}:`, error.message);
         if (url === urls[urls.length - 1]) {
-          throw error; // Throw on last attempt
+          throw new Error(`Cannot load domain: ${error.message}`);
         }
       }
     }
 
     if (!success) {
-      throw new Error('Failed to load the domain');
+      throw new Error('Failed to load the domain with both HTTPS and HTTP');
     }
-
-    // Wait a bit more to catch lazy-loaded resources using delay helper
-    await delay(2000);
 
     await browser.close();
     browser = null;
