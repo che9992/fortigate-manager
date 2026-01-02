@@ -26,6 +26,10 @@ export default function AddressesPage() {
   const [editingAddress, setEditingAddress] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50); // Show 50 items per page
+
   // Helper function to convert to array
   const toArray = (value: any): string[] => {
     if (Array.isArray(value)) return value.map(v => typeof v === 'object' ? v.name || String(v) : String(v));
@@ -76,6 +80,7 @@ export default function AddressesPage() {
 
   // Filter addresses based on search term
   useEffect(() => {
+    setCurrentPage(1); // Reset to first page on search
     if (!searchTerm.trim()) {
       setFilteredAddresses(addresses);
     } else {
@@ -96,6 +101,7 @@ export default function AddressesPage() {
 
   // Filter groups based on search term
   useEffect(() => {
+    setCurrentPage(1); // Reset to first page on search
     if (!searchTerm.trim()) {
       setFilteredGroups(groups);
     } else {
@@ -111,6 +117,22 @@ export default function AddressesPage() {
       setFilteredGroups(filtered);
     }
   }, [groups, searchTerm]);
+
+  // Reset page when switching tabs
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  // Pagination calculations
+  const currentData = activeTab === 'addresses' ? filteredAddresses : filteredGroups;
+  const totalPages = Math.ceil(currentData.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = currentData.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
 
   const handleAddressSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -536,8 +558,14 @@ export default function AddressesPage() {
                   검색 결과가 없습니다
                 </div>
               ) : (
-                <div className="divide-y divide-gray-200">
-                  {filteredAddresses.map((addr) => (
+                <>
+                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <p className="text-sm text-gray-600">
+                      전체 {filteredAddresses.length}개 중 {startIndex + 1}-{Math.min(endIndex, filteredAddresses.length)} 표시
+                    </p>
+                  </div>
+                  <div className="divide-y divide-gray-200">
+                    {(paginatedData as Address[]).map((addr) => (
                     <div key={addr.name} className="p-4 flex items-center justify-between hover:bg-gray-50">
                       <div>
                         <h3 className="font-medium text-gray-900">{addr.name}</h3>
@@ -571,7 +599,54 @@ export default function AddressesPage() {
                       </div>
                     </div>
                   ))}
-                </div>
+                  </div>
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+                      <button
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        이전
+                      </button>
+                      <div className="flex items-center space-x-2">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => goToPage(pageNum)}
+                              className={`px-3 py-1 rounded-md text-sm ${
+                                currentPage === pageNum
+                                  ? 'bg-blue-600 text-white'
+                                  : 'text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        다음
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -685,8 +760,14 @@ export default function AddressesPage() {
                   검색 결과가 없습니다
                 </div>
               ) : (
-                <div className="divide-y divide-gray-200">
-                  {filteredGroups.map((group) => (
+                <>
+                  <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                    <p className="text-sm text-gray-600">
+                      전체 {filteredGroups.length}개 중 {startIndex + 1}-{Math.min(endIndex, filteredGroups.length)} 표시
+                    </p>
+                  </div>
+                  <div className="divide-y divide-gray-200">
+                    {(paginatedData as AddressGroup[]).map((group) => (
                     <div key={group.name} className="p-4 flex items-center justify-between hover:bg-gray-50">
                       <div className="flex-1">
                         <h3 className="font-medium text-gray-900">{group.name}</h3>
@@ -721,7 +802,54 @@ export default function AddressesPage() {
                       </div>
                     </div>
                   ))}
-                </div>
+                  </div>
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+                      <button
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        이전
+                      </button>
+                      <div className="flex items-center space-x-2">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => goToPage(pageNum)}
+                              className={`px-3 py-1 rounded-md text-sm ${
+                                currentPage === pageNum
+                                  ? 'bg-blue-600 text-white'
+                                  : 'text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        다음
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

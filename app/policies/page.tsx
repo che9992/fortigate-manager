@@ -22,6 +22,10 @@ export default function PoliciesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingPolicy, setEditingPolicy] = useState<number | null>(null);
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50); // Show 50 items per page
+
   // Helper function to convert to array
   const toArray = (value: any): string[] => {
     if (Array.isArray(value)) return value.map(v => typeof v === 'object' ? v.name || String(v) : String(v));
@@ -77,6 +81,7 @@ export default function PoliciesPage() {
 
   // Filter policies based on search term
   useEffect(() => {
+    setCurrentPage(1); // Reset to first page on search
     if (!searchTerm.trim()) {
       setFilteredPolicies(policies);
     } else {
@@ -100,6 +105,16 @@ export default function PoliciesPage() {
       setFilteredPolicies(filtered);
     }
   }, [policies, searchTerm]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPolicies.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedPolicies = filteredPolicies.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -443,8 +458,14 @@ export default function PoliciesPage() {
               <p>검색 결과가 없습니다</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
-              {filteredPolicies.map((policy) => (
+            <>
+              <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                <p className="text-sm text-gray-600">
+                  전체 {filteredPolicies.length}개 중 {startIndex + 1}-{Math.min(endIndex, filteredPolicies.length)} 표시
+                </p>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {paginatedPolicies.map((policy) => (
                 <div key={policy.policyid} className="p-4 hover:bg-gray-50">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -534,7 +555,54 @@ export default function PoliciesPage() {
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+                  <button
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    이전
+                  </button>
+                  <div className="flex items-center space-x-2">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => goToPage(pageNum)}
+                          className={`px-3 py-1 rounded-md text-sm ${
+                            currentPage === pageNum
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    다음
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
