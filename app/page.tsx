@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@/lib/store';
 import { FortigateClientProxy } from '@/lib/fortigate-client-proxy';
-import { Activity, AlertCircle, CheckCircle, XCircle, Server, Shield, Users } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle, XCircle, Server, Shield, Users, ExternalLink } from 'lucide-react';
 import type { DashboardStats } from '@/types';
 
 export default function DashboardPage() {
@@ -170,36 +170,52 @@ export default function DashboardPage() {
           <h2 className="text-lg font-semibold text-gray-900">서버 상태</h2>
         </div>
         <div className="divide-y divide-gray-200">
-          {stats?.serverStatus.map((server) => (
-            <div key={server.serverId} className="p-6 flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                {server.status === 'online' ? (
-                  <CheckCircle className="h-6 w-6 text-green-500" />
-                ) : (
-                  <XCircle className="h-6 w-6 text-red-500" />
-                )}
-                <div>
-                  <h3 className="font-medium text-gray-900">{server.serverName}</h3>
-                  {server.version && (
-                    <p className="text-sm text-gray-500">Version: {server.version}</p>
+          {stats?.serverStatus.map((server) => {
+            const serverData = servers.find(s => s.id === server.serverId);
+            return (
+              <div key={server.serverId} className="p-6 flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  {server.status === 'online' ? (
+                    <CheckCircle className="h-6 w-6 text-green-500" />
+                  ) : (
+                    <XCircle className="h-6 w-6 text-red-500" />
                   )}
+                  <div>
+                    <h3 className="font-medium text-gray-900">{server.serverName}</h3>
+                    {server.version && (
+                      <p className="text-sm text-gray-500">Version: {server.version}</p>
+                    )}
+                    {serverData && (
+                      <p className="text-xs text-gray-400 mt-1">{serverData.host}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  {serverData && (
+                    <button
+                      onClick={() => window.open(`https://${serverData.host}`, '_blank', 'noopener,noreferrer')}
+                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                      title="FortiGate 관리 페이지 열기"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span>접속</span>
+                    </button>
+                  )}
+                  <span
+                    className={`
+                      inline-flex px-3 py-1 rounded-full text-xs font-medium
+                      ${server.status === 'online'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                      }
+                    `}
+                  >
+                    {server.status === 'online' ? '온라인' : '오류'}
+                  </span>
                 </div>
               </div>
-              <div className="text-right">
-                <span
-                  className={`
-                    inline-flex px-3 py-1 rounded-full text-xs font-medium
-                    ${server.status === 'online'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                    }
-                  `}
-                >
-                  {server.status === 'online' ? '온라인' : '오류'}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
